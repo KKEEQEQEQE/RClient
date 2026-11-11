@@ -51,7 +51,9 @@ async function loadPopular(){
  $("#discover-grid").innerHTML='<div class="loading-state">Loading Roblox experiences…</div>';
  try{
   currentGames=await window.rclient.popularGames();
-  await renderGames($("#home-grid"),currentGames.slice(0,8));
+  const featured=currentGames[0];
+  if(featured){const hero=$("#featured-game");const art=await getImages([featured]);hero.style.backgroundImage=`linear-gradient(90deg,#111722 0%,#111722e8 43%,#11172255 100%),url("${art[featured.id]||""}")`;hero.style.backgroundSize="cover";hero.style.backgroundPosition="center";hero.querySelector("h1").textContent=featured.name;hero.querySelector("p").textContent=(featured.creatorName||"Roblox creator")+" · "+formatPlayers(featured.playing);hero.querySelector(".eyebrow").textContent="FEATURED EXPERIENCE";hero.querySelector(".primary-button").onclick=()=>window.rclient.openGame(featured.rootPlaceId||featured.id);}
+  await renderGames($("#home-grid"),config.favorites?.length?config.favorites.slice(0,5):currentGames.slice(0,5));
   if($("#game-search").value.trim()==="")await renderGames($("#discover-grid"),currentGames);
  }catch(e){
   const msg=esc(e.message||"Roblox discovery is unavailable.");
@@ -123,7 +125,7 @@ async function renderFavorites(){
 }
 function renderAccount(){
  const a=config.linkedAccount;
- $("#top-account-name").textContent=a?a.displayName||a.name:"Connect Roblox";
+ $("#top-account-name").textContent=a?a.displayName||a.name:"Connect Roblox";$("#welcome-account").textContent=a?(a.displayName||a.name):"to RClient";
  $("#top-avatar").hidden=!a?.avatar;$("#top-avatar-fallback").hidden=Boolean(a?.avatar);
  if(a?.avatar)$("#top-avatar").src=a.avatar;
  $("#avatar-preview-name").textContent=a?(a.displayName||a.name):"Connect account";
