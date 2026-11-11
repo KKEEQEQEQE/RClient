@@ -238,19 +238,50 @@ ipcMain.handle("updates:check", async () => {
   }
 });
 
+ipcMain.handle("updates:download", async () => {
+  if (!app.isPackaged) throw new Error("Updates are available in installed builds.");
+  return autoUpdater.downloadUpdate();
+});
+
+ipcMain.handle("updates:install", () => {
+  if (!app.isPackaged) return false;
+  autoUpdater.quitAndInstall();
+  return true;
+});
+
 app.whenReady().then(() => {
   configPath = path.join(app.getPath("userData"), "settings.json");
   nativeTheme.themeSource = readConfig().theme === "light" ? "light" : "dark";
   createWindow();
 
   if (app.isPackaged) {
-    autoUpdater.autoDownload = true;
-    autoUpdater.on("update-downloaded", () => {
-      if (mainWindow) {
-        mainWindow.webContents.send("updates:downloaded");
-      }
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on("checking-for-update", () => {
+      if (mainWindow) mainWindow.webContents.send("updates:checking");
     });
-    autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+    autoUpdater.on("update-available", info => {
+      if (mainWindow) mainWindow.webContents.send("updates:available", { version: info.version });
+    });
+    autoUpdater.on("update-not-available", () => {
+      if (mainWindow) mainWindow.webContents.send("updates:not-available");
+    });
+    autoUpdater.on("download-progress", progress => {
+      if (mainWindow) mainWindow.webContents.send("updates:progress", {
+        percent: Math.round(progress.percent || 0)
+      });
+    });
+    autoUpdater.on("update-downloaded", info => {
+      if (mainWindow) mainWindow.webContents.send("updates:downloaded", { version: info.version });
+    });
+    autoUpdater.on("error", error => {
+      if (mainWindow) mainWindow.webContents.send("updates:error", { message: error.message });
+    });
+    mainWindow.webContents.once("did-finish-load", () => {
+      autoUpdater.checkForUpdates().catch(error => {
+        if (mainWindow) mainWindow.webContents.send("updates:error", { message: error.message });
+      });
+    });
   }
 
   app.on("activate", () => {
