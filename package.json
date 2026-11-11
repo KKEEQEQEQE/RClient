@@ -1,6 +1,6 @@
 {
   "name": "rclient",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A modern desktop companion for discovering and launching Roblox experiences.",
   "main": "src/main.js",
   "author": "RClient",
@@ -39,7 +39,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -50,7 +52,10 @@
       "createStartMenuShortcut": true
     },
     "mac": {
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     }
   }
 }
