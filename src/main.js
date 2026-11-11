@@ -55,7 +55,7 @@ async function robloxGet(url) {
 }
 function normalizeGame(game) {
   return {
-    id: Number(game.id || game.universeId), rootPlaceId: Number(game.rootPlaceId || game.placeId || game.id),
+    id: Number(game.universeId || game.id), rootPlaceId: Number(game.rootPlaceId || game.placeId || game.rootPlace?.id || game.id),
     name: game.name || "Untitled experience", description: game.description || "",
     creatorName: game.creatorName || game.creator?.name || "Roblox creator",
     playing: Number(game.playerCount ?? game.playing ?? 0),
@@ -69,9 +69,38 @@ function safeIds(ids, max=50) {
 async function searchGames(keyword, limit=30) {
   const q = String(keyword || "").trim().slice(0,80);
   if (!q) return [];
-  const params = new URLSearchParams({ keyword:q, limit:String(limit), sortOrder:"2", sortType:"1" });
-  const data = await robloxGet("https://games.roblox.com/v1/games/search?" + params);
-  return (data.games || data.data || []).map(normalizeGame).filter(g => g.id);
+  const params = new URLSearchParams({
+    searchQuery:q,
+    sessionId:"RClientDesktop",
+    pageType:"all"
+  });
+  const data = await robloxGet("https://apis.roblox.com/search-api/omni-search?" + params);
+  const found = [];
+  const visit = value => {
+    if (!value) return;
+    if (Array.isArray(value)) { for (const item of value) visit(item); return; }
+    if (typeof value !== "object") return;
+    const candidate = value.universe || value;
+    const universeId = Number(candidate.universeId || candidate.id);
+    const placeId = Number(candidate.rootPlaceId || candidate.placeId || candidate.rootPlace?.id);
+    if (universeId > 0 && placeId > 0 && candidate.name) {
+      found.push(normalizeGame({
+        ...candidate,
+        id:universeId,
+        universeId,
+        rootPlaceId:placeId,
+        creatorName:candidate.creatorName || candidate.creator?.name,
+        playerCount:candidate.playerCount ?? candidate.playing
+      }));
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== "creator" && key !== "thumbnail" && key !== "image") visit(child);
+    }
+  };
+  visit(data.searchResults || data.results || []);
+  const unique = new Map();
+  for (const game of found) if (game.id && !unique.has(game.id)) unique.set(game.id,game);
+  return [...unique.values()].slice(0,Math.max(1,Math.min(Number(limit)||30,50)));
 }
 async function getGameImages(ids) {
   if (!ids.length) return {};
