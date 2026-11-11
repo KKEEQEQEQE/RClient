@@ -81,3 +81,8 @@ src/
 ## License
 
 MIT
+
+
+## Automatic updates
+
+Installed builds check GitHub Releases for updates when RClient starts. When a newer version is found, RClient asks whether to download it now or later. Downloads run in the background while the app remains usable. Once downloaded, RClient offers **Restart & update**; choosing **Later** leaves the current session running and the update prompt appears again the next time RClient starts. Updates are not force-installed while the app is in use.
