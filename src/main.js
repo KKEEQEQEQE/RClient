@@ -135,7 +135,6 @@ ipcMain.handle("roblox:catalog-thumbnails", async (_e, ids) => {
 ipcMain.handle("roblox:lookup-account", async (_e, username) => {
   const name = String(username||"").trim().replace(/^@/,"").slice(0,20);
   if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw new Error("Enter a valid Roblox username.");
-  const data = await robloxGet("https://users.roblox.com/v1/usernames/users");
   const response = await fetch("https://users.roblox.com/v1/usernames/users",{
     method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},
     body:JSON.stringify({usernames:[name],excludeBannedUsers:true}),signal:AbortSignal.timeout(12000)
