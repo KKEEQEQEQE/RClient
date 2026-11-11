@@ -74,7 +74,9 @@ async function searchGames(keyword, limit=30) {
     sessionId:"RClientDesktop",
     pageType:"all"
   });
-  const data = await robloxGet("https://apis.roblox.com/search-api/omni-search?" + params);
+  let data = null;
+  try { data = await robloxGet("https://apis.roblox.com/search-api/omni-search?" + params); }
+  catch {}
   const found = [];
   const visit = value => {
     if (!value) return;
@@ -97,9 +99,17 @@ async function searchGames(keyword, limit=30) {
       if (key !== "creator" && key !== "thumbnail" && key !== "image") visit(child);
     }
   };
-  visit(data.searchResults || data.results || []);
+  if (data) visit(data.searchResults || data.results || []);
+  if (!found.length) {
+    const fallbackParams = new URLSearchParams({keyword:q,limit:String(Math.min(Number(limit)||30,50)),sortOrder:"2",sortType:"1"});
+    try {
+      const fallback = await robloxGet("https://games.roblox.com/v1/games/search?" + fallbackParams);
+      for (const game of (fallback.games || fallback.data || [])) found.push(normalizeGame(game));
+    } catch {}
+  }
   const unique = new Map();
   for (const game of found) if (game.id && !unique.has(game.id)) unique.set(game.id,game);
+  if (!unique.size) throw new Error("Roblox game search returned no usable results. Try again in a moment.");
   return [...unique.values()].slice(0,Math.max(1,Math.min(Number(limit)||30,50)));
 }
 async function getGameImages(ids) {
