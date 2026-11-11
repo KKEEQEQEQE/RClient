@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self';">
+  <title>RClient</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">R</div><div><strong>RCLIENT</strong><small>ROBLOX COMPANION</small></div></div>
+      <div class="nav-label">WORKSPACE</div>
+      <nav>
+        <button class="nav-item active" data-page="home"><span>⌂</span> Home</button>
+        <button class="nav-item" data-page="discover"><span>◈</span> Discover</button>
+        <button class="nav-item" data-page="catalog"><span>▦</span> Catalog</button>
+        <button class="nav-item" data-page="favorites"><span>☆</span> Favorites</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="nav-label">CLIENT</div>
+        <button class="nav-item" data-page="performance"><span>◉</span> Performance</button>
+        <button class="nav-item" data-page="settings"><span>⚙</span> Settings</button>
+        <div class="sidebar-status"><i></i><span id="connection-label">Connecting to Roblox</span></div>
+        <div class="version-label" id="version-label">RClient</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumb"><span>RClient</span><b>/</b><strong id="page-heading">Home</strong></div>
+        <div class="top-actions">
+          <button class="icon-button" id="theme-toggle" title="Toggle theme">◐</button>
+          <button class="profile-button" id="profile-button"><span class="avatar">R</span><span>Roblox account</span><b>↗</b></button>
+        </div>
+      </header>
+
+      <section class="page active" id="page-home">
+        <div class="hero">
+          <div class="hero-copy">
+            <div class="eyebrow"><i></i> YOUR ROBLOX HUB</div>
+            <h1>Play more.<br><em>Fuss less.</em></h1>
+            <p>Discover experiences, explore the catalog, and get into your next game without the usual tab-hopping.</p>
+            <div class="hero-actions">
+              <button class="primary-button" data-navigate="discover">Explore games <span>→</span></button>
+              <button class="secondary-button" data-navigate="catalog">Browse catalog</button>
+            </div>
+          </div>
+          <div class="hero-art"><div class="orb orb-one"></div><div class="orb orb-two"></div><div class="hero-glyph">R</div><div class="hero-caption">ONE PLACE FOR YOUR ROBLOX LIFE</div></div>
+        </div>
+        <div class="section-heading"><div><div class="eyebrow">PICK UP WHERE YOU LEFT OFF</div><h2>Recently played</h2></div><button class="text-button" data-navigate="discover">Find something new ↗</button></div>
+        <div class="game-grid" id="recent-grid"><div class="empty-state">Your recently opened experiences will show up here.</div></div>
+        <div class="section-heading compact"><div><div class="eyebrow">FRESH FINDS</div><h2>Popular on Roblox</h2></div><button class="text-button" data-navigate="discover">View all ↗</button></div>
+        <div class="game-grid" id="home-grid"><div class="loading-state">Loading experiences…</div></div>
+      </section>
+
+      <section class="page" id="page-discover">
+        <div class="page-intro"><div class="eyebrow">FIND YOUR NEXT FAVORITE</div><h1>Discover</h1><p>Search Roblox experiences and launch them from one place.</p></div>
+        <div class="search-bar"><span>⌕</span><input id="game-search" placeholder="Search games and experiences…" autocomplete="off"><button id="game-search-button">Search</button></div>
+        <div class="section-heading"><div><h2 id="discover-title">Popular experiences</h2><p class="muted" id="discover-subtitle">A selection of games from Roblox discovery.</p></div></div>
+        <div class="game-grid" id="discover-grid"><div class="loading-state">Loading experiences…</div></div>
+      </section>
+
+      <section class="page" id="page-catalog">
+        <div class="page-intro"><div class="eyebrow">AVATAR ITEMS & MORE</div><h1>Catalog</h1><p>Explore Roblox marketplace listings. Purchases open on the official Roblox website.</p></div>
+        <div class="search-bar"><span>⌕</span><input id="catalog-search" placeholder="Search avatar items…" autocomplete="off"><button id="catalog-search-button">Search</button></div>
+        <div class="section-heading"><div><h2 id="catalog-title">Search the catalog</h2><p class="muted">Browse items without leaving RClient.</p></div></div>
+        <div class="catalog-grid" id="catalog-grid"><div class="empty-state">Search for an item to get started.</div></div>
+      </section>
+
+      <section class="page" id="page-favorites">
+        <div class="page-intro"><div class="eyebrow">YOUR PERSONAL SHORTLIST</div><h1>Favorites</h1><p>Keep your go-to experiences close.</p></div>
+        <div class="game-grid" id="favorites-grid"><div class="empty-state">Favorite an experience to see it here.</div></div>
+      </section>
+
+      <section class="page" id="page-performance">
+        <div class="page-intro"><div class="eyebrow">MAKE IT FEEL RIGHT</div><h1>Performance</h1><p>Quick access to Roblox performance settings and system information.</p></div>
+        <div class="settings-layout">
+          <div class="settings-card">
+            <div class="settings-card-heading"><div><h3>Frame-rate target</h3><p>Choose a target to use in Roblox's in-game settings.</p></div><span class="pill">WINDOWS</span></div>
+            <div class="fps-options" id="fps-options">
+              <button data-fps="60">60</button><button data-fps="120">120</button><button data-fps="144">144</button><button data-fps="165">165</button><button data-fps="240" class="selected">240</button>
+            </div>
+            <div class="note">RClient stores your preferred target. Set the matching Maximum Frame Rate inside Roblox Settings → Graphics Mode / Maximum Frame Rate. The available choices depend on your Roblox build and display.</div>
+          </div>
+          <div class="settings-card">
+            <div class="settings-card-heading"><div><h3>Roblox installation</h3><p>Check whether the standard desktop player is present.</p></div></div>
+            <div class="detect-row"><div><strong id="install-status">Checking…</strong><span id="install-path">Looking for Roblox Player</span></div><button class="secondary-button" id="detect-button">Check again</button></div>
+          </div>
+          <div class="settings-card">
+            <div class="settings-card-heading"><div><h3>Performance tips</h3><p>A few useful things to check before launching.</p></div></div>
+            <ul class="tips-list"><li>Use the in-game Maximum Frame Rate option when available.</li><li>Choose a graphics level that keeps frame times stable.</li><li>Close heavy background apps if performance dips.</li><li>Keep your graphics driver up to date.</li></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-settings">
+        <div class="page-intro"><div class="eyebrow">MAKE RCLIENT YOURS</div><h1>Settings</h1><p>Personalize the desktop experience.</p></div>
+        <div class="settings-layout">
+          <div class="settings-card"><div class="settings-card-heading"><div><h3>Appearance</h3><p>Choose the look of your workspace.</p></div></div><div class="theme-options"><button data-theme="dark" class="theme-choice selected"><span class="theme-preview dark-preview"></span><strong>Dark</strong></button><button data-theme="midnight" class="theme-choice"><span class="theme-preview midnight-preview"></span><strong>Midnight</strong></button><button data-theme="light" class="theme-choice"><span class="theme-preview light-preview"></span><strong>Light</strong></button></div></div>
+          <div class="settings-card"><div class="settings-card-heading"><div><h3>Updates</h3><p>Keep RClient up to date.</p></div></div><div class="detect-row"><div><strong>RClient updates</strong><span id="update-status">Automatic updates are checked when an installed build starts.</span></div><button class="secondary-button" id="update-button">Check updates</button></div></div>
+          <div class="settings-card"><div class="settings-card-heading"><div><h3>Roblox account</h3><p>Manage your account on Roblox's official site.</p></div></div><button class="secondary-button" id="account-button">Open Roblox account ↗</button></div>
+          <div class="settings-card about-card"><div><h3>RClient</h3><p>A community-built desktop companion. Not affiliated with or endorsed by Roblox Corporation.</p><span id="about-version">Version 0.1.0</span></div></div>
+        </div>
+      </section>
+
+      <div class="toast" id="toast"></div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
