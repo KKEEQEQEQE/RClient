@@ -1,316 +1,193 @@
-const $ = selector => document.querySelector(selector);
-const $$ = selector => [...document.querySelectorAll(selector)];
-
-let config = {
-  theme: "dark",
-  favorites: [],
-  recentGames: [],
-  fpsTarget: 240
-};
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+let config={theme:"dark",favorites:[],recentGames:[],fpsTarget:240,linkedAccount:null,catalogCategory:"all",catalogSort:"relevance"};
+let currentGames=[];
+let currentCatalog=[];
+let catalogRequest=0;
 let toastTimer;
-let availableUpdateVersion = null;
-let updateIsDownloaded = false;
-
-function toast(message) {
-  const node = $("#toast");
-  node.textContent = message;
-  node.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => node.classList.remove("show"), 2600);
+let updateIsDownloaded=false;
+function toast(message){const n=$("#toast");n.textContent=message;n.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>n.classList.remove("show"),2800);}
+async function saveConfig(patch){config=await window.rclient.setConfig(patch);applyTheme();}
+function applyTheme(){document.body.dataset.theme=config.theme||"dark";$$("[data-theme]").forEach(b=>b.classList.toggle("selected",b.dataset.theme===config.theme));$("#theme-toggle").textContent=config.theme==="light"?"☼":"◐";}
+function navigate(page){
+  $$(".page").forEach(n=>n.classList.toggle("active",n.id==="page-"+page));
+  $$(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.page===page));
+  $("#page-heading").textContent=page==="catalog"?"Avatar Shop":page.charAt(0).toUpperCase()+page.slice(1);
+  if(page==="favorites")renderFavorites();
+  if(page==="performance")detectRoblox();
+  if(page==="catalog"&&!currentCatalog.length)loadCatalog();
 }
-
-async function saveConfig(patch) {
-  config = await window.rclient.setConfig(patch);
-  applyTheme();
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function formatPlayers(v){const n=Number(v||0);return n>=1e6?(n/1e6).toFixed(1)+"m playing":n>=1e3?(n/1e3).toFixed(1)+"k playing":n.toLocaleString()+" playing";}
+async function getImages(games){try{return await window.rclient.gameThumbnails(games.map(g=>g.id));}catch{return {};}}
+function gameCard(g,img){
+ const fav=config.favorites.some(x=>x.id===g.id);
+ return `<article class="game-card"><div class="game-image">${img?`<img src="${esc(img)}" alt="" loading="lazy">`:`<div class="image-fallback">${esc((g.name||"R").slice(0,1).toUpperCase())}</div>`}</div><div class="game-info"><h3 title="${esc(g.name)}">${esc(g.name)}</h3><div class="game-meta"><span>${esc(g.creatorName||"Roblox creator")}</span><span>${esc(formatPlayers(g.playing))}</span></div><div class="game-actions"><button class="play-button" data-play="${Number(g.rootPlaceId||g.id)}">Play ↗</button><button class="favorite-button ${fav?"is-favorite":""}" data-favorite="${Number(g.id)}">${fav?"★":"☆"}</button></div></div></article>`;
 }
-
-function applyTheme() {
-  document.body.dataset.theme = config.theme || "dark";
-  $$("[data-theme]").forEach(button => button.classList.toggle("selected", button.dataset.theme === config.theme));
-  $("#theme-toggle").textContent = config.theme === "light" ? "☼" : "◐";
+async function renderGames(container,games){
+ if(!games.length){container.innerHTML='<div class="empty-state">No experiences found. Try another category or search.</div>';return;}
+ container.innerHTML='<div class="loading-state">Loading game artwork…</div>';
+ const imgs=await getImages(games);container.innerHTML=games.map(g=>gameCard(g,imgs[g.id])).join("");bindGameCards(container);
 }
-
-function navigate(page) {
-  $$(".page").forEach(node => node.classList.toggle("active", node.id === "page-" + page));
-  $$(".nav-item").forEach(node => node.classList.toggle("active", node.dataset.page === page));
-  $("#page-heading").textContent = page.charAt(0).toUpperCase() + page.slice(1);
-  if (page === "favorites") renderFavorites();
-  if (page === "performance") detectRoblox();
+function bindGameCards(container){
+ container.querySelectorAll("[data-play]").forEach(b=>b.addEventListener("click",async()=>{
+  b.disabled=true;b.textContent="Opening…";
+  try{await window.rclient.openGame(b.dataset.play);config=await window.rclient.getConfig();toast("Launching Roblox…");}
+  catch(e){toast(e.message||"Could not launch Roblox");b.disabled=false;b.textContent="Play ↗";}
+ }));
+ container.querySelectorAll("[data-favorite]").forEach(b=>b.addEventListener("click",async()=>{
+  const id=Number(b.dataset.favorite),g=currentGames.find(x=>x.id===id)||config.favorites.find(x=>x.id===id);if(!g)return;
+  const exists=config.favorites.some(x=>x.id===id),favorites=exists?config.favorites.filter(x=>x.id!==id):[...config.favorites,g];
+  await saveConfig({favorites});toast(exists?"Removed from favorites":"Added to favorites");
+  const active=$(".page.active")?.id;if(active==="page-favorites")renderFavorites();else if(active==="page-home")renderGames($("#home-grid"),currentGames.slice(0,8));else if(active==="page-discover")renderGames($("#discover-grid"),currentGames);
+ }));
 }
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, char => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  })[char]);
+async function loadPopular(){
+ $("#home-grid").innerHTML='<div class="loading-state">Loading Roblox experiences…</div>';
+ $("#discover-grid").innerHTML='<div class="loading-state">Loading Roblox experiences…</div>';
+ try{
+  currentGames=await window.rclient.popularGames();
+  await renderGames($("#home-grid"),currentGames.slice(0,8));
+  if($("#game-search").value.trim()==="")await renderGames($("#discover-grid"),currentGames);
+ }catch(e){
+  const msg=esc(e.message||"Roblox discovery is unavailable.");
+  $("#home-grid").innerHTML='<div class="empty-state">Could not load experiences: '+msg+'</div>';
+  $("#discover-grid").innerHTML='<div class="empty-state">Could not load experiences: '+msg+'</div>';
+  toast("Roblox discovery failed");
+ }
 }
-
-function formatPlayers(value) {
-  const number = Number(value || 0);
-  if (number >= 1000000) return (number / 1000000).toFixed(1) + "m playing";
-  if (number >= 1000) return (number / 1000).toFixed(1) + "k playing";
-  return number.toLocaleString() + " playing";
+async function searchGames(){
+ const q=$("#game-search").value.trim();
+ $("#discover-title").textContent=q?'Results for “'+q+'”':"Popular experiences";
+ $("#discover-grid").innerHTML='<div class="loading-state">Searching Roblox…</div>';
+ try{currentGames=q?await window.rclient.searchGames(q):await window.rclient.popularGames();await renderGames($("#discover-grid"),currentGames);}
+ catch(e){$("#discover-grid").innerHTML='<div class="empty-state">'+esc(e.message||"Search failed.")+'</div>';}
 }
-
-async function getImages(games) {
-  try {
-    return await window.rclient.gameThumbnails(games.map(game => game.id));
-  } catch {
-    return {};
-  }
+async function selectGameFeed(feed){
+ $$("#game-categories [data-game-feed]").forEach(b=>b.classList.toggle("selected",b.dataset.gameFeed===feed));
+ $("#game-search").value="";
+ if(feed==="all"||feed==="popular"){await searchGames();return;}
+ $("#discover-title").textContent=feed.charAt(0).toUpperCase()+feed.slice(1)+" experiences";
+ $("#discover-grid").innerHTML='<div class="loading-state">Loading '+esc(feed)+' games…</div>';
+ try{currentGames=await window.rclient.searchGames(feed);await renderGames($("#discover-grid"),currentGames);}
+ catch(e){$("#discover-grid").innerHTML='<div class="empty-state">'+esc(e.message||"Could not load this feed.")+'</div>';}
 }
-
-function gameCard(game, imageUrl) {
-  const favorite = config.favorites.some(item => item.id === game.id);
-  return `<article class="game-card">
-    <div class="game-image">${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy">` : `<div class="image-fallback">${escapeHtml((game.name || "R").slice(0,1).toUpperCase())}</div>`}</div>
-    <div class="game-info">
-      <h3 title="${escapeHtml(game.name)}">${escapeHtml(game.name)}</h3>
-      <div class="game-meta"><span>${escapeHtml(game.creatorName || "Roblox creator")}</span><span>${escapeHtml(formatPlayers(game.playing))}</span></div>
-      <div class="game-actions"><button class="play-button" data-play="${Number(game.rootPlaceId || game.id)}">Play ↗</button><button class="favorite-button ${favorite ? "is-favorite" : ""}" data-favorite="${Number(game.id)}" title="Favorite">${favorite ? "★" : "☆"}</button></div>
-    </div>
-  </article>`;
+function catalogCard(item,img){
+ const price=item.price==null?"Off sale":item.price===0?"Free":Number(item.price).toLocaleString()+" R$";
+ return `<article class="catalog-card item-card"><button class="item-preview" data-open-item="${Number(item.id)}" title="View ${esc(item.name)}">${img?`<img src="${esc(img)}" alt="${esc(item.name)}" loading="lazy">`:'<div class="catalog-icon">◇</div>'}</button><div class="item-info"><h3 title="${esc(item.name)}">${esc(item.name)}</h3><p>${esc(item.creatorName)}</p><strong>${price}</strong><button class="item-view-button" data-open-item="${Number(item.id)}">View item ↗</button></div></article>`;
 }
-
-async function renderGames(container, games) {
-  if (!games.length) {
-    container.innerHTML = '<div class="empty-state">No experiences found. Try another search.</div>';
-    return;
-  }
-  container.innerHTML = '<div class="loading-state">Loading game artwork…</div>';
-  const images = await getImages(games);
-  container.innerHTML = games.map(game => gameCard(game, images[game.id])).join("");
-  bindGameCards(container);
+async function loadCatalog(){
+ const request=++catalogRequest;
+ const category=$("#catalog-categories .selected")?.dataset.catalogCategory||config.catalogCategory||"all";
+ const sort=$("#catalog-sort").value||config.catalogSort||"relevance";
+ const query=$("#catalog-search").value.trim();
+ $("#catalog-grid").innerHTML='<div class="loading-state">Loading avatar shop…</div>';
+ $("#catalog-result-count").textContent="Loading items…";
+ try{
+  const items=await window.rclient.searchCatalog({keyword:query,category,sort,limit:48});
+  if(request!==catalogRequest)return;
+  let visible=items;
+  if($("#free-filter").checked)visible=visible.filter(x=>x.price===0);
+  if($("#on-sale-filter").checked)visible=visible.filter(x=>x.price!==null&&x.price!==undefined);
+  currentCatalog=visible;
+  if(!visible.length){$("#catalog-grid").innerHTML='<div class="empty-state">No items match these filters. Try another category or remove a filter.</div>';$("#catalog-result-count").textContent="0 items";return;}
+  const thumbs=await window.rclient.catalogThumbnails(visible.map(x=>x.id));
+  if(request!==catalogRequest)return;
+  $("#catalog-grid").innerHTML=visible.map(x=>catalogCard(x,thumbs[x.id])).join("");
+  $("#catalog-result-count").textContent=visible.length+" items";
+  bindCatalogItems($("#catalog-grid"));
+ }catch(e){
+  if(request!==catalogRequest)return;
+  $("#catalog-grid").innerHTML='<div class="empty-state">Could not load the Roblox avatar shop: '+esc(e.message||"Please try again.")+'</div>';
+  $("#catalog-result-count").textContent="Shop unavailable";
+ }
 }
-
-function bindGameCards(container) {
-  container.querySelectorAll("[data-play]").forEach(button => button.addEventListener("click", async () => {
-    button.disabled = true;
-    button.textContent = "Opening…";
-    try {
-      await window.rclient.openGame(button.dataset.play);
-      config = await window.rclient.getConfig();
-      toast("Opening Roblox experience");
-    } catch (error) {
-      toast(error.message || "Could not open this experience");
-      button.disabled = false;
-      button.textContent = "Play ↗";
-    }
-  }));
-  container.querySelectorAll("[data-favorite]").forEach(button => button.addEventListener("click", async () => {
-    const id = Number(button.dataset.favorite);
-    const game = currentGames.find(item => item.id === id) || [...config.favorites].find(item => item.id === id);
-    if (!game) return;
-    const exists = config.favorites.some(item => item.id === id);
-    const favorites = exists ? config.favorites.filter(item => item.id !== id) : [...config.favorites, game];
-    await saveConfig({ favorites });
-    toast(exists ? "Removed from favorites" : "Added to favorites");
-    await refreshVisibleGames();
-  }));
+function bindCatalogItems(root){
+ root.querySelectorAll("[data-open-item]").forEach(b=>b.addEventListener("click",async()=>{
+  const id=Number(b.dataset.openItem),item=currentCatalog.find(x=>x.id===id);if(item){const old=JSON.parse(localStorage.getItem("rclient-recent-items")||"[]");localStorage.setItem("rclient-recent-items",JSON.stringify([item,...old.filter(x=>x.id!==id)].slice(0,12)));}
+  try{await window.rclient.openCatalogItem(id);}catch(e){toast(e.message||"Could not open item");}
+ }));
 }
-
-let currentGames = [];
-async function refreshVisibleGames() {
-  const active = $(".page.active")?.id;
-  if (active === "page-home") await renderGames($("#home-grid"), currentGames);
-  if (active === "page-discover") await renderGames($("#discover-grid"), currentGames);
-  if (active === "page-favorites") await renderFavorites();
+async function renderRecentCatalog(){
+ const items=JSON.parse(localStorage.getItem("rclient-recent-items")||"[]");
+ if(!items.length){$("#recent-catalog-grid").innerHTML='<div class="empty-state">No recently viewed items yet.</div>';return;}
+ const thumbs=await window.rclient.catalogThumbnails(items.map(x=>x.id));
+ $("#recent-catalog-grid").innerHTML=items.map(x=>catalogCard(x,thumbs[x.id])).join("");bindCatalogItems($("#recent-catalog-grid"));
 }
-
-async function loadPopular() {
-  $("#home-grid").innerHTML = '<div class="loading-state">Loading experiences from Roblox…</div>';
-  $("#discover-grid").innerHTML = '<div class="loading-state">Loading experiences from Roblox…</div>';
-  try {
-    currentGames = await window.rclient.popularGames();
-    await renderGames($("#home-grid"), currentGames.slice(0, 8));
-    await renderGames($("#discover-grid"), currentGames);
-  } catch (error) {
-    $("#home-grid").innerHTML = '<div class="empty-state">Roblox discovery is temporarily unavailable. Try again in a moment.</div>';
-    $("#discover-grid").innerHTML = '<div class="empty-state">Roblox discovery is temporarily unavailable. Try again in a moment.</div>';
-    toast(error.message || "Could not load Roblox discovery");
-  }
+async function renderFavorites(){
+ const games=config.favorites||[];if(!games.length){$("#favorites-grid").innerHTML='<div class="empty-state">Favorite an experience to see it here.</div>';return;}
+ await renderGames($("#favorites-grid"),games);
 }
-
-async function searchGames() {
-  const query = $("#game-search").value.trim();
-  if (!query) return loadPopular();
-  $("#discover-title").textContent = "Results for “" + query + "”";
-  $("#discover-grid").innerHTML = '<div class="loading-state">Searching Roblox…</div>';
-  try {
-    currentGames = await window.rclient.searchGames(query);
-    await renderGames($("#discover-grid"), currentGames);
-  } catch (error) {
-    $("#discover-grid").innerHTML = '<div class="empty-state">Search is temporarily unavailable. Please try again.</div>';
-  }
+function renderAccount(){
+ const a=config.linkedAccount;
+ $("#top-account-name").textContent=a?a.displayName||a.name:"Connect Roblox";
+ $("#top-avatar").hidden=!a?.avatar;$("#top-avatar-fallback").hidden=Boolean(a?.avatar);
+ if(a?.avatar)$("#top-avatar").src=a.avatar;
+ $("#avatar-preview-name").textContent=a?(a.displayName||a.name):"Connect account";
+ $("#avatar-stage").innerHTML=a?.avatar?`<img class="avatar-3d-image" src="${esc(a.avatar)}" alt="Avatar for ${esc(a.name)}"><span>@${esc(a.name)}</span>`:'<div class="avatar-placeholder">R</div><span>Link a Roblox profile to preview its avatar</span>';
+ $("#connected-account").innerHTML=a?`<div class="connected-profile"><img src="${esc(a.avatar||"")}" alt=""><div><strong>${esc(a.displayName||a.name)}</strong><span>@${esc(a.name)} · ID ${Number(a.id)}</span></div><button class="text-button" id="disconnect-account">Disconnect</button></div>`:"<span>No profile connected</span>";
+ $("#account-username").value=a?.name||"";
+ $("#disconnect-account")?.addEventListener("click",async()=>{await saveConfig({linkedAccount:null});renderAccount();toast("Profile disconnected");});
 }
-
-async function searchCatalog() {
-  const query = $("#catalog-search").value.trim();
-  if (!query) {
-    $("#catalog-grid").innerHTML = '<div class="empty-state">Enter a search term to browse catalog items.</div>';
-    return;
-  }
-  $("#catalog-title").textContent = "Results for “" + query + "”";
-  $("#catalog-grid").innerHTML = '<div class="loading-state">Searching the Roblox catalog…</div>';
-  try {
-    const items = await window.rclient.searchCatalog(query);
-    if (!items.length) {
-      $("#catalog-grid").innerHTML = '<div class="empty-state">No catalog items found for that search.</div>';
-      return;
-    }
-    $("#catalog-grid").innerHTML = items.map(item => `<article class="catalog-card">
-      <div><div class="catalog-icon">◇</div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.creatorName)} · ${item.price == null ? "Price varies" : item.price === 0 ? "Free" : item.price + " Robux"}</p></div>
-      <button data-catalog-item="${Number(item.id)}">View on Roblox ↗</button>
-    </article>`).join("");
-    $$("#catalog-grid [data-catalog-item]").forEach(button => button.addEventListener("click", () => window.rclient.openCatalogItem(button.dataset.catalogItem)));
-  } catch (error) {
-    $("#catalog-grid").innerHTML = '<div class="empty-state">Catalog search is temporarily unavailable. Try again shortly.</div>';
-  }
+async function connectAccount(){
+ const name=$("#account-username").value.trim();if(!name){toast("Enter your Roblox username first");return;}
+ const b=$("#connect-account-button");b.disabled=true;b.textContent="Looking up…";
+ try{const account=await window.rclient.lookupAccount(name);await saveConfig({linkedAccount:account});renderAccount();toast("Roblox profile connected");}
+ catch(e){toast(e.message||"Could not find that Roblox profile");}
+ finally{b.disabled=false;b.textContent="Connect profile";}
 }
-
-async function renderFavorites() {
-  const games = config.favorites || [];
-  if (!games.length) {
-    $("#favorites-grid").innerHTML = '<div class="empty-state">Favorite an experience to see it here.</div>';
-    return;
-  }
-  await renderGames($("#favorites-grid"), games);
+async function detectRoblox(){
+ $("#install-status").textContent="Checking…";
+ try{const r=await window.rclient.detectRoblox();$("#install-status").textContent=r.installed?"Roblox Player detected · "+r.type:"Roblox Player not detected";$("#install-path").textContent=r.executable||"Install Roblox from roblox.com or the Microsoft Store. RClient can still try the official launch link.";$("#connection-label").textContent=r.installed?"Roblox Player detected":"Roblox launch link ready";}
+ catch{$("#install-status").textContent="Could not check installation";$("#install-path").textContent="RClient can still try opening Roblox through its official app link.";}
 }
-
-async function detectRoblox() {
-  $("#install-status").textContent = "Checking…";
-  try {
-    const result = await window.rclient.detectRoblox();
-    $("#install-status").textContent = result.installed ? "Roblox Player detected" : "Roblox Player not detected";
-    $("#install-path").textContent = result.executable || "RClient can still open the Roblox website to launch experiences.";
-    $("#connection-label").textContent = result.installed ? "Roblox Player detected" : "Roblox web launch ready";
-  } catch {
-    $("#install-status").textContent = "Could not check installation";
-    $("#install-path").textContent = "You can still use web-based game launching.";
-  }
+function setShopTab(tab){
+ $$(".shop-tab").forEach(b=>b.classList.toggle("selected",b.dataset.shopTab===tab));
+ $("#shop-panel").hidden=tab!=="shop";$("#customize-panel").hidden=tab!=="customize";
+ if(tab==="customize")renderRecentCatalog();
 }
-
-function bindEvents() {
-  $$("[data-page]").forEach(button => button.addEventListener("click", () => navigate(button.dataset.page)));
-  $$("[data-navigate]").forEach(button => button.addEventListener("click", () => navigate(button.dataset.navigate)));
-  $("#game-search-button").addEventListener("click", searchGames);
-  $("#game-search").addEventListener("keydown", event => { if (event.key === "Enter") searchGames(); });
-  $("#catalog-search-button").addEventListener("click", searchCatalog);
-  $("#catalog-search").addEventListener("keydown", event => { if (event.key === "Enter") searchCatalog(); });
-  $("#theme-toggle").addEventListener("click", () => {
-    const order = ["dark", "midnight", "light"];
-    const next = order[(order.indexOf(config.theme) + 1) % order.length];
-    saveConfig({ theme: next });
-  });
-  $$("[data-theme]").forEach(button => button.addEventListener("click", () => saveConfig({ theme: button.dataset.theme })));
-  $$("[data-fps]").forEach(button => button.addEventListener("click", async () => {
-    await saveConfig({ fpsTarget: Number(button.dataset.fps) });
-    $$("[data-fps]").forEach(item => item.classList.toggle("selected", item === button));
-    toast("Preferred frame-rate target saved");
-  }));
-  $("#detect-button").addEventListener("click", detectRoblox);
-  $("#profile-button").addEventListener("click", () => window.rclient.openProfile());
-  $("#account-button").addEventListener("click", () => window.rclient.openSettings());
-  $("#update-button").addEventListener("click", async () => {
-    $("#update-status").textContent = "Checking for updates…";
-    const result = await window.rclient.checkUpdates();
-    if (result.message) $("#update-status").textContent = result.message;
-    else if (!result.available) $("#update-status").textContent = "You're up to date.";
-  });
-
-  $("#update-later").addEventListener("click", () => {
-    $("#update-modal").hidden = true;
-    $("#update-status").textContent = updateIsDownloaded
-      ? "Update downloaded. Restart RClient whenever you're ready."
-      : "Update postponed. RClient will check again next time it opens.";
-  });
-
-  $("#update-primary").addEventListener("click", async () => {
-    const button = $("#update-primary");
-    if (updateIsDownloaded) {
-      button.disabled = true;
-      button.textContent = "Restarting…";
-      await window.rclient.installUpdate();
-      return;
-    }
-    button.disabled = true;
-    $("#update-later").disabled = true;
-    $("#update-progress").hidden = false;
-    $("#update-message").textContent = "Downloading the update in the background. You can keep using RClient.";
-    $("#update-progress-label").textContent = "Starting download…";
-    try {
-      await window.rclient.downloadUpdate();
-    } catch (error) {
-      button.disabled = false;
-      $("#update-later").disabled = false;
-      $("#update-message").textContent = error.message || "The update couldn't be downloaded. You can try again later.";
-      $("#update-progress").hidden = true;
-    }
-  });
-
-  window.rclient.onUpdateAvailable(info => {
-    availableUpdateVersion = info?.version || null;
-    updateIsDownloaded = false;
-    $("#update-title").textContent = "A new version is available";
-    $("#update-message").textContent = "RClient " + (availableUpdateVersion ? "v" + availableUpdateVersion : "has an update") + " is available. Download it now or choose Later.";
-    $("#update-primary").disabled = false;
-    $("#update-primary").textContent = "Update now →";
-    $("#update-later").disabled = false;
-    $("#update-progress").hidden = true;
-    $("#update-modal").hidden = false;
-    $("#update-status").textContent = "Update available: " + (availableUpdateVersion || "new version");
-  });
-
-  window.rclient.onUpdateProgress(progress => {
-    const percent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
-    $("#update-progress-fill").style.width = percent + "%";
-    $("#update-progress-label").textContent = "Downloading… " + percent + "%";
-    $("#update-status").textContent = "Downloading update… " + percent + "%";
-  });
-
-  window.rclient.onUpdateDownloaded(info => {
-    updateIsDownloaded = true;
-    $("#update-title").textContent = "Ready to restart";
-    $("#update-message").textContent = "RClient " + (info?.version ? "v" + info.version + " " : "") + "has downloaded. Restart when you're ready to install it.";
-    $("#update-progress").hidden = true;
-    $("#update-primary").disabled = false;
-    $("#update-primary").textContent = "Restart & update →";
-    $("#update-later").disabled = false;
-    $("#update-modal").hidden = false;
-    $("#update-status").textContent = "Update downloaded. Restart RClient to install.";
-    toast("RClient update downloaded");
-  });
-
-  window.rclient.onUpdateNotAvailable(() => {
-    $("#update-status").textContent = "You're up to date.";
-  });
-
-  window.rclient.onUpdateError(error => {
-    const message = error?.message || "Unknown update error";
-    $("#update-status").textContent = "Update check failed: " + message;
-    if (!$("#update-modal").hidden) {
-      $("#update-message").textContent = "Something went wrong: " + message;
-      $("#update-primary").disabled = false;
-      $("#update-later").disabled = false;
-      $("#update-progress").hidden = true;
-    }
-  });
+function bindEvents(){
+ $$("[data-page]").forEach(b=>b.addEventListener("click",()=>navigate(b.dataset.page)));
+ $$("[data-navigate]").forEach(b=>b.addEventListener("click",()=>navigate(b.dataset.navigate)));
+ $("#game-search-button").addEventListener("click",searchGames);
+ $("#game-search").addEventListener("keydown",e=>{if(e.key==="Enter")searchGames();});
+ $$("#game-categories [data-game-feed]").forEach(b=>b.addEventListener("click",()=>selectGameFeed(b.dataset.gameFeed)));
+ $("#catalog-search-button").addEventListener("click",loadCatalog);
+ $("#catalog-search").addEventListener("keydown",e=>{if(e.key==="Enter")loadCatalog();});
+ $$("#catalog-categories [data-catalog-category]").forEach(b=>b.addEventListener("click",async()=>{$$("#catalog-categories [data-catalog-category]").forEach(x=>x.classList.toggle("selected",x===b));await saveConfig({catalogCategory:b.dataset.catalogCategory});loadCatalog();}));
+ $("#catalog-sort").addEventListener("change",async()=>{await saveConfig({catalogSort:$("#catalog-sort").value});loadCatalog();});
+ $("#free-filter").addEventListener("change",loadCatalog);$("#on-sale-filter").addEventListener("change",loadCatalog);
+ $$(".shop-tab").forEach(b=>b.addEventListener("click",()=>setShopTab(b.dataset.shopTab)));
+ $("#customize-avatar-button").addEventListener("click",()=>window.rclient.openExternal("https://www.roblox.com/my/avatar"));
+ $("#open-avatar-editor").addEventListener("click",()=>window.rclient.openExternal("https://www.roblox.com/my/avatar"));
+ $("#connect-account-button").addEventListener("click",connectAccount);
+ $("#account-username").addEventListener("keydown",e=>{if(e.key==="Enter")connectAccount();});
+ $("#theme-toggle").addEventListener("click",()=>{const order=["dark","midnight","light"];saveConfig({theme:order[(order.indexOf(config.theme)+1)%order.length]});});
+ $$("[data-theme]").forEach(b=>b.addEventListener("click",()=>saveConfig({theme:b.dataset.theme})));
+ $$("[data-fps]").forEach(b=>b.addEventListener("click",async()=>{await saveConfig({fpsTarget:Number(b.dataset.fps)});$$("[data-fps]").forEach(x=>x.classList.toggle("selected",x===b));toast("Preferred frame-rate target saved");}));
+ $("#detect-button").addEventListener("click",detectRoblox);
+ $("#profile-button").addEventListener("click",()=>config.linkedAccount?window.rclient.openProfile(config.linkedAccount.id):navigate("settings"));
+ $("#account-button").addEventListener("click",()=>window.rclient.openSettings());
+ $("#update-button").addEventListener("click",async()=>{ $("#update-status").textContent="Checking for updates…";const r=await window.rclient.checkUpdates();if(r.message)$("#update-status").textContent=r.message;else if(!r.available)$("#update-status").textContent="You're up to date.";});
+ $("#update-later").addEventListener("click",()=>{$("#update-modal").hidden=true;$("#update-status").textContent=updateIsDownloaded?"Update downloaded. Restart whenever ready.":"Update postponed.";});
+ $("#update-primary").addEventListener("click",async()=>{const b=$("#update-primary");if(updateIsDownloaded){await window.rclient.installUpdate();return;}b.disabled=true;$("#update-later").disabled=true;$("#update-progress").hidden=false;$("#update-message").textContent="Downloading in the background. Keep using RClient.";try{await window.rclient.downloadUpdate();}catch(e){b.disabled=false;$("#update-later").disabled=false;$("#update-message").textContent=e.message;$("#update-progress").hidden=true;}});
+ window.rclient.onUpdateAvailable(info=>{updateIsDownloaded=false;$("#update-title").textContent="A new version is available";$("#update-message").textContent="RClient v"+(info?.version||"new version")+" is available.";$("#update-primary").disabled=false;$("#update-primary").textContent="Update now →";$("#update-later").disabled=false;$("#update-progress").hidden=true;$("#update-modal").hidden=false;});
+ window.rclient.onUpdateProgress(p=>{const n=Math.max(0,Math.min(100,Number(p?.percent)||0));$("#update-progress-fill").style.width=n+"%";$("#update-progress-label").textContent="Downloading… "+n+"%";});
+ window.rclient.onUpdateDownloaded(info=>{updateIsDownloaded=true;$("#update-title").textContent="Ready to restart";$("#update-message").textContent="RClient "+(info?.version||"update")+" has downloaded.";$("#update-progress").hidden=true;$("#update-primary").disabled=false;$("#update-primary").textContent="Restart & update →";$("#update-later").disabled=false;$("#update-modal").hidden=false;});
+ window.rclient.onUpdateNotAvailable(()=>$("#update-status").textContent="You're up to date.");
+ window.rclient.onUpdateError(e=>{$("#update-status").textContent="Update check failed: "+(e?.message||"Unknown error");});
 }
-
-async function init() {
-  bindEvents();
-  config = { ...config, ...(await window.rclient.getConfig()) };
-  applyTheme();
-  const version = await window.rclient.getVersion();
-  $("#version-label").textContent = "RClient v" + version;
-  $("#about-version").textContent = "Version " + version;
-  $("#fps-options").querySelectorAll("button").forEach(button => button.classList.toggle("selected", Number(button.dataset.fps) === config.fpsTarget));
-  await detectRoblox();
-  await loadPopular();
-  if (config.recentGames?.length) {
-    const recentIds = config.recentGames.map(item => item.id).filter(Number.isSafeInteger);
-    const recent = currentGames.filter(game => recentIds.includes(game.id));
-    if (recent.length) await renderGames($("#recent-grid"), recent);
-  }
+async function init(){
+ bindEvents();config={...config,...await window.rclient.getConfig()};applyTheme();renderAccount();
+ const v=await window.rclient.getVersion();$("#version-label").textContent="RClient v"+v;$("#about-version").textContent="Version "+v;
+ $("#fps-options").querySelectorAll("button").forEach(b=>b.classList.toggle("selected",Number(b.dataset.fps)===config.fpsTarget));
+ $("#catalog-sort").value=config.catalogSort||"relevance";
+ $$("#catalog-categories [data-catalog-category]").forEach(b=>b.classList.toggle("selected",b.dataset.catalogCategory===(config.catalogCategory||"all")));
+ await Promise.all([detectRoblox(),loadPopular(),loadCatalog()]);
+ if(config.recentGames?.length){
+  const ids=config.recentGames.map(x=>x.id);
+  const recent=currentGames.filter(g=>ids.includes(g.id));
+  if(recent.length)await renderGames($("#recent-grid"),recent);
+ }
 }
-
-window.addEventListener("DOMContentLoaded", init);
+window.addEventListener("DOMContentLoaded",init);
