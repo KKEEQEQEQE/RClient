@@ -167,8 +167,13 @@ ipcMain.handle("roblox:search-catalog", async (_event, keyword) => {
 ipcMain.handle("roblox:open-game", async (_event, placeId) => {
   const id = Number(placeId);
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid place ID");
-  const url = "https://www.roblox.com/games/" + id;
-  await shell.openExternal(url);
+  const directUrl = "roblox://placeId=" + id;
+  const fallbackUrl = "https://www.roblox.com/games/start?placeId=" + id;
+  try {
+    await shell.openExternal(directUrl);
+  } catch {
+    await shell.openExternal(fallbackUrl);
+  }
   const config = readConfig();
   const recentGames = [{ id, playedAt: Date.now() }, ...config.recentGames.filter(item => item.id !== id)].slice(0, 12);
   writeConfig({ recentGames });
