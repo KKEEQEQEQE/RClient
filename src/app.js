@@ -8,6 +8,8 @@ let config = {
   fpsTarget: 240
 };
 let toastTimer;
+let availableUpdateVersion = null;
+let updateIsDownloaded = false;
 
 function toast(message) {
   const node = $("#toast");
@@ -211,11 +213,86 @@ function bindEvents() {
   $("#update-button").addEventListener("click", async () => {
     $("#update-status").textContent = "Checking for updates…";
     const result = await window.rclient.checkUpdates();
-    $("#update-status").textContent = result.message || (result.available ? "Update found: " + result.version : "You're up to date.");
+    if (result.message) $("#update-status").textContent = result.message;
+    else if (!result.available) $("#update-status").textContent = "You're up to date.";
   });
-  window.rclient.onUpdateDownloaded(() => {
-    $("#update-status").textContent = "An update is downloaded and will install when you restart RClient.";
+
+  $("#update-later").addEventListener("click", () => {
+    $("#update-modal").hidden = true;
+    $("#update-status").textContent = updateIsDownloaded
+      ? "Update downloaded. Restart RClient whenever you're ready."
+      : "Update postponed. RClient will check again next time it opens.";
+  });
+
+  $("#update-primary").addEventListener("click", async () => {
+    const button = $("#update-primary");
+    if (updateIsDownloaded) {
+      button.disabled = true;
+      button.textContent = "Restarting…";
+      await window.rclient.installUpdate();
+      return;
+    }
+    button.disabled = true;
+    $("#update-later").disabled = true;
+    $("#update-progress").hidden = false;
+    $("#update-message").textContent = "Downloading the update in the background. You can keep using RClient.";
+    $("#update-progress-label").textContent = "Starting download…";
+    try {
+      await window.rclient.downloadUpdate();
+    } catch (error) {
+      button.disabled = false;
+      $("#update-later").disabled = false;
+      $("#update-message").textContent = error.message || "The update couldn't be downloaded. You can try again later.";
+      $("#update-progress").hidden = true;
+    }
+  });
+
+  window.rclient.onUpdateAvailable(info => {
+    availableUpdateVersion = info?.version || null;
+    updateIsDownloaded = false;
+    $("#update-title").textContent = "A new version is available";
+    $("#update-message").textContent = "RClient " + (availableUpdateVersion ? "v" + availableUpdateVersion : "has an update") + " is available. Download it now or choose Later.";
+    $("#update-primary").disabled = false;
+    $("#update-primary").textContent = "Update now →";
+    $("#update-later").disabled = false;
+    $("#update-progress").hidden = true;
+    $("#update-modal").hidden = false;
+    $("#update-status").textContent = "Update available: " + (availableUpdateVersion || "new version");
+  });
+
+  window.rclient.onUpdateProgress(progress => {
+    const percent = Math.max(0, Math.min(100, Number(progress?.percent) || 0));
+    $("#update-progress-fill").style.width = percent + "%";
+    $("#update-progress-label").textContent = "Downloading… " + percent + "%";
+    $("#update-status").textContent = "Downloading update… " + percent + "%";
+  });
+
+  window.rclient.onUpdateDownloaded(info => {
+    updateIsDownloaded = true;
+    $("#update-title").textContent = "Ready to restart";
+    $("#update-message").textContent = "RClient " + (info?.version ? "v" + info.version + " " : "") + "has downloaded. Restart when you're ready to install it.";
+    $("#update-progress").hidden = true;
+    $("#update-primary").disabled = false;
+    $("#update-primary").textContent = "Restart & update →";
+    $("#update-later").disabled = false;
+    $("#update-modal").hidden = false;
+    $("#update-status").textContent = "Update downloaded. Restart RClient to install.";
     toast("RClient update downloaded");
+  });
+
+  window.rclient.onUpdateNotAvailable(() => {
+    $("#update-status").textContent = "You're up to date.";
+  });
+
+  window.rclient.onUpdateError(error => {
+    const message = error?.message || "Unknown update error";
+    $("#update-status").textContent = "Update check failed: " + message;
+    if (!$("#update-modal").hidden) {
+      $("#update-message").textContent = "Something went wrong: " + message;
+      $("#update-primary").disabled = false;
+      $("#update-later").disabled = false;
+      $("#update-progress").hidden = true;
+    }
   });
 }
 
