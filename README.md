@@ -57,7 +57,7 @@ The packaged app checks GitHub Releases using electron-updater. Publish versione
 
 RClient currently uses public Roblox web endpoints for experience search, game thumbnails, and catalog search. Launching hands off to the official Roblox website, which can open the Roblox Player when installed. Account actions and purchases stay on Roblox's official website; RClient does not collect Roblox passwords or session cookies.
 
-The account profile connection uses Roblox's public username lookup and avatar thumbnail endpoints; it does not authenticate the user or establish account ownership. Authenticated linking requires a registered Roblox OAuth application. The catalog displays Roblox-rendered item thumbnails; equipping and editing outfits are handled by Roblox's official avatar editor.
+The account profile connection uses Roblox's public username lookup and avatar thumbnail endpoints; it does not authenticate the user or establish account ownership. Authenticated linking requires a registered Roblox OAuth application. The catalog displays Roblox marketplace item thumbnails and a public-profile avatar thumbnail; equipping and editing outfits are handled by Roblox's official avatar editor. Roblox's dedicated interactive 3D thumbnail endpoints now require Open Cloud API key or OAuth authentication, so those are not called anonymously.
 
 The Performance page stores a preferred frame-rate target as a reminder. Users configure the actual Maximum Frame Rate in Roblox's own settings. RClient does not claim to force an unsupported frame-rate cap.
 
