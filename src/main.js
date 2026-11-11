@@ -305,7 +305,7 @@ app.whenReady().then(()=>{
   nativeTheme.themeSource=readConfig().theme==="light"?"light":"dark";
   createWindow();
   if(app.isPackaged){
-    autoUpdater.autoDownload=false;autoUpdater.autoInstallOnAppQuit=true;
+    autoUpdater.autoDownload=true;autoUpdater.autoInstallOnAppQuit=true;autoUpdater.allowDowngrade=false;
     autoUpdater.on("checking-for-update",()=>mainWindow?.webContents.send("updates:checking"));
     autoUpdater.on("update-available",info=>mainWindow?.webContents.send("updates:available",{version:info.version}));
     autoUpdater.on("update-not-available",()=>mainWindow?.webContents.send("updates:not-available"));
