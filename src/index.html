@@ -36,19 +36,24 @@
     </header>
 
     <section class="page active" id="page-home">
-      <div class="hero">
-        <div class="hero-copy">
-          <div class="eyebrow"><i></i> YOUR ROBLOX HUB</div>
-          <h1>Play more.<br><em>Fuss less.</em></h1>
-          <p>Discover experiences, explore the avatar shop, and get into your next game from one place.</p>
-          <div class="hero-actions"><button class="primary-button" data-navigate="discover">Explore games <span>→</span></button><button class="secondary-button" data-navigate="catalog">Avatar shop</button></div>
+      <div class="home-layout">
+        <div class="home-primary">
+          <div class="welcome-line"><span>Welcome back</span><strong id="welcome-account">to RClient</strong><span class="welcome-separator">•</span><span>Explore the Roblox universe</span></div>
+          <div class="featured-banner" id="featured-game">
+            <div class="featured-art"><div class="featured-orbit orbit-a"></div><div class="featured-orbit orbit-b"></div><div class="featured-cube">R</div></div>
+            <div class="featured-copy"><span class="eyebrow">FEATURED EXPERIENCE</span><h1>Welcome to RClient</h1><p>Your next favorite Roblox experience is one click away.</p><button class="primary-button" data-navigate="discover">Explore experiences <span>→</span></button></div>
+          </div>
+          <div class="home-section-head"><div><h2>Continue</h2><span>Pick up where you left off</span></div><button class="text-button" data-navigate="discover">Visit Recent Games ›</button></div>
+          <div class="game-grid home-game-row" id="recent-grid"><div class="empty-state">Your recently opened experiences will show up here.</div></div>
+          <div class="home-section-head"><div><h2>Favorites</h2><span>Your saved experiences</span></div><button class="text-button" data-navigate="favorites">Browse Favorites ›</button></div>
+          <div class="game-grid home-game-row" id="home-grid"><div class="loading-state">Loading experiences…</div></div>
         </div>
-        <div class="hero-art"><div class="orb orb-one"></div><div class="orb orb-two"></div><div class="hero-glyph">R</div><div class="hero-caption">ONE PLACE FOR YOUR ROBLOX LIFE</div></div>
+        <aside class="home-rail">
+          <section class="rail-panel friends-panel"><div class="rail-heading"><strong>Friends</strong><span>0 online</span><button class="text-button" data-navigate="players">View all ›</button></div><div class="friend-empty"><div class="friend-avatar">R</div><div><strong>Find your friends</strong><span>Search Roblox players and profiles</span></div></div><button class="rail-action" data-navigate="players">Find players <span>→</span></button></section>
+          <section class="rail-panel promo-panel"><div class="promo-art"><span>ROBLOX</span><strong>PLAY<br>YOUR WAY</strong><div class="promo-orb"></div></div><div class="promo-caption"><strong>Discover something new</strong><span>Explore experiences made by the community.</span></div><button class="rail-action" data-navigate="discover">Explore games <span>→</span></button></section>
+          <section class="rail-panel quick-panel"><span class="eyebrow">QUICK ACCESS</span><button data-navigate="catalog"><span>▦</span> Avatar marketplace <b>›</b></button><button data-navigate="performance"><span>◉</span> Client settings <b>›</b></button><button data-navigate="settings"><span>⚙</span> Customize RClient <b>›</b></button></section>
+        </aside>
       </div>
-      <div class="section-heading"><div><div class="eyebrow">PICK UP WHERE YOU LEFT OFF</div><h2>Recently played</h2></div><button class="text-button" data-navigate="discover">Find something new ↗</button></div>
-      <div class="game-grid" id="recent-grid"><div class="empty-state">Your recently opened experiences will show up here.</div></div>
-      <div class="section-heading compact"><div><div class="eyebrow">TRENDING RIGHT NOW</div><h2>Popular on Roblox</h2></div><button class="text-button" data-navigate="discover">View all ↗</button></div>
-      <div class="game-grid" id="home-grid"><div class="loading-state">Loading experiences…</div></div>
     </section>
 
     <section class="page" id="page-discover">
@@ -62,29 +67,22 @@
     </section>
 
     <section class="page" id="page-catalog">
-      <div class="page-intro"><div class="eyebrow">YOUR LOOK, YOUR WAY</div><h1>Avatar Shop</h1><p>Browse avatar items with previews, categories, sorting and filters.</p></div>
-      <div class="avatar-shop-layout">
-        <aside class="avatar-preview-panel">
-          <div class="preview-heading"><div><span class="eyebrow">YOUR AVATAR</span><h2 id="avatar-preview-name">Connect account</h2></div><span class="live-dot"></span></div>
-          <div class="avatar-stage" id="avatar-stage"><div class="avatar-placeholder">R</div><span>Link a Roblox profile to preview its avatar</span></div>
-          <button class="secondary-button full-button" id="customize-avatar-button">Customize on Roblox ↗</button>
-          <p class="preview-note">Avatar editing and equipping are handled securely on Roblox.</p>
-        </aside>
-        <div class="shop-content">
-          <div class="shop-tabs"><button class="shop-tab selected" data-shop-tab="shop">Shop</button><button class="shop-tab" data-shop-tab="customize">Customize</button></div>
-          <div id="shop-panel">
-            <div class="search-bar catalog-search"><span>⌕</span><input id="catalog-search" placeholder="Search avatar items…" autocomplete="off"><button id="catalog-search-button">Search</button></div>
-            <div class="catalog-toolbar"><div class="category-row" id="catalog-categories">
-              <button class="category-chip selected" data-catalog-category="all">All</button><button class="category-chip" data-catalog-category="clothing">Clothing</button><button class="category-chip" data-catalog-category="shirts">Shirts</button><button class="category-chip" data-catalog-category="tshirts">T-Shirts</button><button class="category-chip" data-catalog-category="pants">Pants</button><button class="category-chip" data-catalog-category="accessories">Accessories</button><button class="category-chip" data-catalog-category="hats">Hats</button><button class="category-chip" data-catalog-category="hair">Hair</button><button class="category-chip" data-catalog-category="face-accessories">Face accessories</button><button class="category-chip" data-catalog-category="neck">Neck</button><button class="category-chip" data-catalog-category="shoulder">Shoulder</button><button class="category-chip" data-catalog-category="front">Front</button><button class="category-chip" data-catalog-category="back">Back</button><button class="category-chip" data-catalog-category="waist">Waist</button><button class="category-chip" data-catalog-category="heads">Heads</button><button class="category-chip" data-catalog-category="faces">Faces</button><button class="category-chip" data-catalog-category="bundles">Bundles</button><button class="category-chip" data-catalog-category="animations">Animations</button><button class="category-chip" data-catalog-category="emotes">Emotes</button><button class="category-chip" data-catalog-category="gear">Gear</button>
-            </div><select id="catalog-sort" aria-label="Sort catalog"><option value="relevance">Recommended</option><option value="popular">Most favorited</option><option value="best-selling">Best selling</option><option value="recent">Recently updated</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></div>
-            <div class="shop-filter-row"><label><input type="checkbox" id="free-filter"> Free items</label><label><input type="checkbox" id="on-sale-filter"> On sale</label><span id="catalog-result-count">Loading shop…</span></div>
+      <div class="marketplace-top"><div class="marketplace-title"><span class="eyebrow">ROBLOX MARKETPLACE</span><h1>Marketplace</h1></div><div class="shop-tabs"><button class="shop-tab selected" data-shop-tab="shop">Shop</button><button class="shop-tab" data-shop-tab="customize">Outfits</button><button class="shop-tab" data-shop-tab="customize">Cart <span class="cart-count">0</span></button></div></div>
+      <div id="shop-panel">
+        <div class="marketplace-layout">
+          <div class="marketplace-main">
+            <div class="market-search-row"><div class="search-bar catalog-search"><span>⌕</span><input id="catalog-search" placeholder="Search the catalog…" autocomplete="off"><button id="catalog-search-button">Search</button></div><select id="catalog-sort" aria-label="Sort catalog"><option value="relevance">Relevance</option><option value="popular">Most favorited</option><option value="best-selling">Best selling</option><option value="recent">Recently updated</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></div>
+            <div class="market-tags"><button class="category-chip selected" data-catalog-category="all">All</button><button class="category-chip" data-catalog-category="clothing">Clothing</button><button class="category-chip" data-catalog-category="accessories">Accessories</button><button class="category-chip" data-catalog-category="hats">Hats</button><button class="category-chip" data-catalog-category="hair">Hair</button><button class="category-chip" data-catalog-category="faces">Face</button><button class="category-chip" data-catalog-category="heads">Heads</button><button class="category-chip" data-catalog-category="animations">Animations</button><button class="category-chip" data-catalog-category="emotes">Emotes</button></div>
+            <div class="market-tags keyword-tags"><span>dreads</span><span>steven</span><span>emotes</span><span>face</span><span>monkey</span><span>beard</span><span>fedora</span><span>scarf</span><span>beanie</span><span>sunglasses</span><span>aura</span></div>
+            <div class="shop-filter-row"><label><input type="checkbox" id="free-filter"> Free items</label><label><input type="checkbox" id="on-sale-filter"> On sale</label><span id="catalog-result-count">Loading items…</span></div>
             <div class="catalog-grid" id="catalog-grid"><div class="loading-state">Loading avatar shop…</div></div>
           </div>
-          <div id="customize-panel" hidden>
-            <div class="customize-card"><div><span class="eyebrow">AVATAR EDITOR</span><h2>Make it yours</h2><p>Use Roblox's avatar editor to change outfits, body, accessories, animations and saved looks. Your avatar preview updates here when you reconnect or refresh your profile.</p><button class="primary-button" id="open-avatar-editor">Open Avatar Editor ↗</button></div><div class="customize-art">✦</div></div>
-            <div class="section-heading"><div><h2>Recently viewed items</h2><p class="muted">Items you open from the shop appear here.</p></div></div><div class="catalog-grid" id="recent-catalog-grid"><div class="empty-state">No recently viewed items yet.</div></div>
-          </div>
+          <aside class="market-filter-panel"><div class="filter-tabs"><strong>Filters</strong><button data-shop-tab="customize">Fitting room</button></div><label>Time range<select><option>All time</option><option>Past day</option><option>Past week</option><option>Past month</option></select></label><label>Sale type<select><option>All</option><option>Off sale</option><option>On sale</option></select></label><label>Price (Robux)<div class="price-inputs"><input placeholder="Min" inputmode="numeric"><input placeholder="Max" inputmode="numeric"></div></label><label>Creator<input placeholder="Creator name"></label><div class="filter-note">Marketplace previews and item details are provided by Roblox.</div></aside>
         </div>
+      </div>
+      <div id="customize-panel" hidden>
+        <div class="customize-card"><div><span class="eyebrow">AVATAR EDITOR</span><h2>Outfits and fitting room</h2><p>Open Roblox to equip items, edit your avatar and manage saved outfits.</p><button class="primary-button" id="open-avatar-editor">Open Avatar Editor ↗</button></div><div class="customize-art">✦</div></div>
+        <div class="section-heading"><div><h2>Recently viewed items</h2><p class="muted">Items you open from the marketplace appear here.</p></div></div><div class="catalog-grid" id="recent-catalog-grid"><div class="empty-state">No recently viewed items yet.</div></div>
       </div>
     </section>
 
