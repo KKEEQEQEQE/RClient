@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, nativeTheme } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, nativeTheme, dialog } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULTS = {
   theme: "dark", accent: "#8b7cff", favorites: [], recentGames: [],
   fpsTarget: 240, showPresence: true, compactMode: false,
+  robloxInstallPath: null, accent: "#8b7cff", uiFont: "Inter",
   linkedAccount: null, catalogCategory: "all", catalogSort: "relevance"
 };
 let mainWindow;
@@ -163,10 +164,13 @@ ipcMain.handle("app:get-config", () => readConfig());
 ipcMain.handle("app:set-config", (_e, patch) => {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Invalid settings payload");
   const allowed = {};
-  for (const key of ["theme","accent","favorites","recentGames","fpsTarget","showPresence","compactMode","linkedAccount","catalogCategory","catalogSort"]) {
+  for (const key of ["theme","accent","uiFont","robloxInstallPath","favorites","recentGames","fpsTarget","showPresence","compactMode","linkedAccount","catalogCategory","catalogSort"]) {
     if (Object.hasOwn(patch,key)) allowed[key]=patch[key];
   }
   if (allowed.theme && !["dark","light","midnight"].includes(allowed.theme)) throw new Error("Unsupported theme");
+  if (allowed.accent && !/^#[0-9a-fA-F]{6}$/.test(allowed.accent)) throw new Error("Invalid accent color");
+  if (allowed.uiFont && !["Inter","Arial","Segoe UI","Verdana","Tahoma"].includes(allowed.uiFont)) throw new Error("Unsupported interface font");
+  if (allowed.robloxInstallPath !== undefined && allowed.robloxInstallPath !== null && typeof allowed.robloxInstallPath !== "string") throw new Error("Invalid Roblox installation path");
   if (allowed.fpsTarget && ![60,120,144,165,240].includes(allowed.fpsTarget)) throw new Error("Unsupported frame-rate target");
   if (allowed.linkedAccount && (!Number.isSafeInteger(Number(allowed.linkedAccount.id)) || !String(allowed.linkedAccount.name || "").trim())) throw new Error("Invalid linked account");
   return writeConfig(allowed);
@@ -254,7 +258,32 @@ async function detectWindowsRoblox() {
   }
   return {installed:Boolean(executable||storePackage),type:executable?"Desktop Player":storePackage?"Microsoft Store":"Not found",executable:executable||storePackage,checked:candidates};
 }
+
+ipcMain.handle("system:pick-roblox-install", async () => {
+  const properties = process.platform === "darwin" ? ["openDirectory"] : ["openFile"];
+  const filters = process.platform === "win32" ? [{ name: "Roblox Player", extensions: ["exe"] }] : undefined;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: "Select Roblox Player installation",
+    properties,
+    ...(filters ? { filters } : {})
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const selected = path.resolve(result.filePaths[0]);
+  const valid = process.platform === "win32"
+    ? ["RobloxPlayerBeta.exe", "Windows10Universal.exe"].includes(path.basename(selected))
+    : process.platform === "darwin" ? selected.endsWith("Roblox.app") : false;
+  if (!valid || !fs.existsSync(selected)) throw new Error(process.platform === "win32"
+    ? "Select RobloxPlayerBeta.exe or Windows10Universal.exe."
+    : "Select the Roblox.app application folder.");
+  writeConfig({ robloxInstallPath: selected });
+  return selected;
+});
+ipcMain.handle("system:clear-roblox-install", () => { writeConfig({ robloxInstallPath: null }); return true; });
+
 ipcMain.handle("system:detect-roblox", async () => {
+  const configured = readConfig().robloxInstallPath;
+  if (configured && fs.existsSync(configured)) return { installed: true, type: "Manually selected", executable: configured, manual: true, checked: [configured] };
+  if (configured) writeConfig({ robloxInstallPath: null });
   if(process.platform==="win32") return detectWindowsRoblox();
   if(process.platform==="darwin"){
     const homes=[path.join(os.homedir(),"Applications","Roblox.app"),"/Applications/Roblox.app"];
