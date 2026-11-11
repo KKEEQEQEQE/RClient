@@ -32,8 +32,12 @@ async function renderGames(container,games){
 function bindGameCards(container){
  container.querySelectorAll("[data-play]").forEach(b=>b.addEventListener("click",async()=>{
   b.disabled=true;b.textContent="Opening…";
-  try{await window.rclient.openGame(b.dataset.play);config=await window.rclient.getConfig();toast("Launching Roblox…");}
-  catch(e){toast(e.message||"Could not launch Roblox");b.disabled=false;b.textContent="Play ↗";}
+  try{
+   const result=await window.rclient.openGame(b.dataset.play);
+   config=await window.rclient.getConfig();
+   toast(result?.method==="browser"?"Opened the Roblox game page — press Play there.":"Opening Roblox Player…");
+   b.disabled=false;b.textContent="Play ↗";
+  }catch(e){toast(e.message||"Could not open this experience");b.disabled=false;b.textContent="Play ↗";}
  }));
  container.querySelectorAll("[data-favorite]").forEach(b=>b.addEventListener("click",async()=>{
   const id=Number(b.dataset.favorite),g=currentGames.find(x=>x.id===id)||config.favorites.find(x=>x.id===id);if(!g)return;
