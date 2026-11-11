@@ -84,10 +84,9 @@ async function loadCatalog(){
  $("#catalog-grid").innerHTML='<div class="loading-state">Loading avatar shop…</div>';
  $("#catalog-result-count").textContent="Loading items…";
  try{
-  const items=await window.rclient.searchCatalog({keyword:query,category,sort,limit:48});
+  const items=await window.rclient.searchCatalog({keyword:query,category,sort,limit:30,freeOnly:$("#free-filter").checked});
   if(request!==catalogRequest)return;
   let visible=items;
-  if($("#free-filter").checked)visible=visible.filter(x=>x.price===0);
   if($("#on-sale-filter").checked)visible=visible.filter(x=>x.price!==null&&x.price!==undefined);
   currentCatalog=visible;
   if(!visible.length){$("#catalog-grid").innerHTML='<div class="empty-state">No items match these filters. Try another category or remove a filter.</div>';$("#catalog-result-count").textContent="0 items";return;}
