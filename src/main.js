@@ -78,18 +78,27 @@ async function getGameImages(ids) {
   const data = await robloxGet("https://thumbnails.roblox.com/v1/games/icons?universeIds=" + ids.join(",") + "&size=512x512&format=Png&isCircular=false");
   return Object.fromEntries((data.data || []).map(x => [x.targetId,x.imageUrl]));
 }
-async function searchCatalog({keyword="",category="all",sort="relevance",limit=30}={}) {
-  const params = new URLSearchParams({ Category:"1", Limit:String(limit), SortType: sort === "recent" ? "2" : sort === "price-low" ? "5" : "3" });
-  if (keyword) params.set("Keyword", String(keyword).slice(0,80));
-  const categoryTypes = {
-    clothing: "Shirt, Pants, TShirt",
-    accessories: "Hat, HairAccessory, FaceAccessory, NeckAccessory, ShoulderAccessory, FrontAccessory, BackAccessory, WaistAccessory",
-    heads: "Head, DynamicHead",
-    faces: "Face",
-    bundles: "Bundle",
-    animations: "EmoteAnimation, RunAnimation, WalkAnimation, IdleAnimation, JumpAnimation, FallAnimation, SwimAnimation, ClimbAnimation"
+async function searchCatalog({keyword="",category="all",sort="relevance",limit=30,freeOnly=false}={}) {
+  const categoryMap = {
+    all: {category:1},
+    clothing: {category:3},
+    accessories: {category:11},
+    heads: {category:4,subcategory:15},
+    faces: {category:4,subcategory:10},
+    bundles: {category:1,subcategory:37},
+    animations: {category:12,subcategory:27}
   };
-  if (categoryTypes[category]) params.set("AssetTypes", categoryTypes[category]);
+  const selected = categoryMap[category] || categoryMap.all;
+  const sortTypes = {relevance:0,recent:3,"price-low":4};
+  const params = new URLSearchParams({
+    Category:String(selected.category),
+    Limit:String([10,28,30].includes(Number(limit))?Number(limit):30),
+    SortType:String(sortTypes[sort] ?? 0),
+    SortAggregation:"5"
+  });
+  if (selected.subcategory !== undefined) params.set("Subcategory",String(selected.subcategory));
+  if (keyword) params.set("Keyword",String(keyword).slice(0,80));
+  if (freeOnly) { params.set("MinPrice","0"); params.set("MaxPrice","0"); }
   const data = await robloxGet("https://catalog.roblox.com/v1/search/items/details?" + params);
   return (data.data || []).map(item => ({
     id:Number(item.id), name:item.name || "Catalog item",
