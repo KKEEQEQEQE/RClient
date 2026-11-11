@@ -8,7 +8,7 @@ let toastTimer;
 let updateIsDownloaded=false;
 function toast(message){const n=$("#toast");n.textContent=message;n.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>n.classList.remove("show"),2800);}
 async function saveConfig(patch){config=await window.rclient.setConfig(patch);applyTheme();}
-function applyTheme(){document.body.dataset.theme=config.theme||"dark";$$("[data-theme]").forEach(b=>b.classList.toggle("selected",b.dataset.theme===config.theme));$("#theme-toggle").textContent=config.theme==="light"?"☼":"◐";}
+function applyTheme(){document.body.dataset.theme=config.theme||"dark";document.documentElement.style.setProperty("--accent",config.accent||"#8b7cff");document.documentElement.style.setProperty("--ui-font",JSON.stringify(config.uiFont||"Inter"));$("[data-theme]").forEach(b=>b.classList.toggle("selected",b.dataset.theme===config.theme));$("#theme-toggle").textContent=config.theme==="light"?"☼":"◐";if($("#accent-color"))$("#accent-color").value=config.accent||"#8b7cff";if($("#ui-font"))$("#ui-font").value=config.uiFont||"Inter";}
 function navigate(page){
   $$(".page").forEach(n=>n.classList.toggle("active",n.id==="page-"+page));
   $$(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.page===page));
@@ -137,7 +137,7 @@ async function connectAccount(){
 }
 async function detectRoblox(){
  $("#install-status").textContent="Checking…";
- try{const r=await window.rclient.detectRoblox();$("#install-status").textContent=r.installed?"Roblox Player detected · "+r.type:"Roblox Player not detected";$("#install-path").textContent=r.executable||"Install Roblox from roblox.com or the Microsoft Store. RClient can still try the official launch link.";$("#connection-label").textContent=r.installed?"Roblox Player detected":"Roblox launch link ready";}
+ try{const r=await window.rclient.detectRoblox();$("#install-status").textContent=r.installed?"Roblox Player detected · "+r.type:"Roblox Player not detected";$("#install-path").textContent=r.executable||"Install Roblox from roblox.com or the Microsoft Store. RClient can still try the official launch link.";$("#browse-install-button").textContent=r.manual?"Change location":"Choose location";$("#connection-label").textContent=r.installed?"Roblox Player detected":"Roblox launch link ready";}
  catch{$("#install-status").textContent="Could not check installation";$("#install-path").textContent="RClient can still try opening Roblox through its official app link.";}
 }
 function setShopTab(tab){
@@ -165,6 +165,11 @@ function bindEvents(){
  $$("[data-theme]").forEach(b=>b.addEventListener("click",()=>saveConfig({theme:b.dataset.theme})));
  $$("[data-fps]").forEach(b=>b.addEventListener("click",async()=>{await saveConfig({fpsTarget:Number(b.dataset.fps)});$$("[data-fps]").forEach(x=>x.classList.toggle("selected",x===b));toast("Preferred frame-rate target saved");}));
  $("#detect-button").addEventListener("click",detectRoblox);
+ $("#browse-install-button").addEventListener("click",async()=>{try{const selected=await window.rclient.pickRobloxInstall();if(selected){toast("Roblox installation saved");await detectRoblox();}}catch(e){toast(e.message||"Could not select Roblox installation");}});
+ $("#clear-install-button").addEventListener("click",async()=>{await window.rclient.clearRobloxInstall();toast("Saved location cleared");await detectRoblox();});
+ $("#accent-color").addEventListener("input",async e=>{await saveConfig({accent:e.target.value});});
+ $("#ui-font").addEventListener("change",async e=>{await saveConfig({uiFont:e.target.value});});
+ $("#reset-appearance").addEventListener("click",async()=>{await saveConfig({accent:"#8b7cff",uiFont:"Inter",theme:"dark"});toast("Appearance reset");});
  $("#profile-button").addEventListener("click",()=>config.linkedAccount?window.rclient.openProfile(config.linkedAccount.id):navigate("settings"));
  $("#account-button").addEventListener("click",()=>window.rclient.openSettings());
  $("#update-button").addEventListener("click",async()=>{ $("#update-status").textContent="Checking for updates…";const r=await window.rclient.checkUpdates();if(r.message)$("#update-status").textContent=r.message;else if(!r.available)$("#update-status").textContent="You're up to date.";});
