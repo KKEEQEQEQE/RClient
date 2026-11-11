@@ -1,6 +1,6 @@
 {
   "name": "rclient",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A feature-rich desktop companion for Roblox discovery and avatar shopping.",
   "main": "src/main.js",
   "author": "RClient",
