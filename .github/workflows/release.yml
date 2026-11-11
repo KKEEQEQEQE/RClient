@@ -22,15 +22,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect version change
+      - name: Detect unpublished version
         id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          CURRENT="$(node -p "require('./package.json').version")"
-          PREVIOUS="$(git show HEAD^:package.json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).version||"")}catch{}})' || true)"
-          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-          echo "tag=v$CURRENT" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$CURRENT" != "$PREVIOUS" ]; then
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || ! gh release view "$TAG" >/dev/null 2>&1; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_release=false" >> "$GITHUB_OUTPUT"
