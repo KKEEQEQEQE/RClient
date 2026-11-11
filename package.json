@@ -1,0 +1,56 @@
+{
+  "name": "rclient",
+  "version": "0.1.0",
+  "description": "A modern desktop companion for discovering and launching Roblox experiences.",
+  "main": "src/main.js",
+  "author": "RClient",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "build": {
+    "appId": "com.rclient.desktop",
+    "productName": "RClient",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "KKEEQEQEQE",
+        "repo": "RClient"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": ["dmg", "zip"]
+    }
+  }
+}
