@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("rclient", {
   openSettings: () => ipcRenderer.invoke("roblox:open-settings"),
   openExternal: url => ipcRenderer.invoke("system:open-external", url),
   detectRoblox: () => ipcRenderer.invoke("system:detect-roblox"),
+  pickRobloxInstall: () => ipcRenderer.invoke("system:pick-roblox-install"),
+  clearRobloxInstall: () => ipcRenderer.invoke("system:clear-roblox-install"),
   checkUpdates: () => ipcRenderer.invoke("updates:check"),
   downloadUpdate: () => ipcRenderer.invoke("updates:download"),
   installUpdate: () => ipcRenderer.invoke("updates:install"),
