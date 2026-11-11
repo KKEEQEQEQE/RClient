@@ -67,51 +67,78 @@ function normalizeGame(game) {
 function safeIds(ids, max=50) {
   return Array.isArray(ids) ? ids.map(Number).filter(id => Number.isSafeInteger(id) && id > 0).slice(0,max) : [];
 }
-async function searchGames(keyword, limit=30) {
-  const q = String(keyword || "").trim().slice(0,80);
-  if (!q) return [];
-  const params = new URLSearchParams({
-    searchQuery:q,
-    sessionId:"RClientDesktop",
-    pageType:"all"
-  });
-  let data = null;
-  try { data = await robloxGet("https://apis.roblox.com/search-api/omni-search?" + params); }
-  catch {}
-  const found = [];
+function extractGameRecords(payload) {
+  const records = [];
+  const seen = new Set();
   const visit = value => {
     if (!value) return;
-    if (Array.isArray(value)) { for (const item of value) visit(item); return; }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
     if (typeof value !== "object") return;
-    const candidate = value.universe || value;
-    const universeId = Number(candidate.universeId || candidate.id);
-    const placeId = Number(candidate.rootPlaceId || candidate.placeId || candidate.rootPlace?.id);
-    if (universeId > 0 && placeId > 0 && candidate.name) {
-      found.push(normalizeGame({
-        ...candidate,
-        id:universeId,
-        universeId,
-        rootPlaceId:placeId,
-        creatorName:candidate.creatorName || candidate.creator?.name,
-        playerCount:candidate.playerCount ?? candidate.playing
-      }));
+    const candidate = value.universe && typeof value.universe === "object" ? value.universe : value;
+    const universeId = Number(candidate.universeId || candidate.universeID || (candidate.rootPlaceId ? candidate.id : 0));
+    const rootPlaceId = Number(candidate.rootPlaceId || candidate.placeId || candidate.rootPlace?.id || 0);
+    const name = candidate.name || candidate.title;
+    if (Number.isSafeInteger(universeId) && universeId > 0 && name) {
+      const key = String(universeId);
+      if (!seen.has(key)) {
+        seen.add(key);
+        records.push({ ...candidate, universeId, rootPlaceId, name });
+      }
     }
     for (const [key, child] of Object.entries(value)) {
-      if (key !== "creator" && key !== "thumbnail" && key !== "image") visit(child);
+      if (!["creator", "thumbnail", "image", "iconImageUrl"].includes(key)) visit(child);
     }
   };
-  if (data) visit(data.searchResults || data.results || []);
-  if (!found.length) {
-    const fallbackParams = new URLSearchParams({keyword:q,limit:String(Math.min(Number(limit)||30,50)),sortOrder:"2",sortType:"1"});
+  visit(payload);
+  return records;
+}
+async function hydrateGameRecords(records) {
+  const valid = records.filter(x => Number.isSafeInteger(Number(x.universeId)) && Number(x.universeId) > 0);
+  const metadata = new Map();
+  for (let i = 0; i < valid.length; i += 50) {
+    const ids = valid.slice(i, i + 50).map(x => Number(x.universeId));
+    if (!ids.length) continue;
     try {
-      const fallback = await robloxGet("https://games.roblox.com/v1/games/search?" + fallbackParams);
-      for (const game of (fallback.games || fallback.data || [])) found.push(normalizeGame(game));
+      const result = await robloxGet("https://games.roblox.com/v1/games?universeIds=" + ids.join(","));
+      for (const game of result.data || []) metadata.set(Number(game.id), game);
     } catch {}
   }
-  const unique = new Map();
-  for (const game of found) if (game.id && !unique.has(game.id)) unique.set(game.id,game);
-  if (!unique.size) throw new Error("Roblox game search returned no usable results. Try again in a moment.");
-  return [...unique.values()].slice(0,Math.max(1,Math.min(Number(limit)||30,50)));
+  const output = [];
+  for (const item of valid) {
+    const extra = metadata.get(Number(item.universeId)) || {};
+    const game = normalizeGame({ ...extra, ...item, id: item.universeId,
+      universeId: item.universeId,
+      rootPlaceId: item.rootPlaceId || extra.rootPlaceId,
+      creatorName: item.creatorName || item.creator?.name || extra.creator?.name,
+      playerCount: item.playerCount ?? item.playing ?? extra.playing,
+      visits: item.visits ?? extra.visits,
+      maxPlayers: item.maxPlayers ?? extra.maxPlayers
+    });
+    if (game.id > 0 && game.rootPlaceId > 0 && game.name !== "Untitled experience") output.push(game);
+  }
+  return output;
+}
+async function searchGames(keyword, limit=30) {
+  const q = String(keyword || "").trim().slice(0,80);
+  if (!q) throw new Error("Enter a game name to search.");
+  const params = new URLSearchParams({
+    searchQuery: q,
+    sessionId: "RClient-" + app.getVersion(),
+    pageType: "all"
+  });
+  let data;
+  try {
+    data = await robloxGet("https://apis.roblox.com/search-api/omni-search?" + params);
+  } catch (error) {
+    throw new Error("Roblox search is unavailable (" + (error.status || error.message) + "). Check your connection and try again.");
+  }
+  const records = extractGameRecords(data.searchResults || data.results || data);
+  const games = await hydrateGameRecords(records);
+  if (!games.length) throw new Error('Roblox returned no usable game results for "' + q + '".');
+  return games.slice(0, Math.max(1, Math.min(Number(limit) || 30, 50)));
 }
 async function getGameImages(ids) {
   if (!ids.length) return {};
@@ -178,14 +205,41 @@ ipcMain.handle("app:set-config", (_e, patch) => {
 
 ipcMain.handle("roblox:search-games", async (_e, keyword) => searchGames(keyword));
 ipcMain.handle("roblox:popular-games", async () => {
-  const feeds = ["popular","anime","obby","roleplay","simulator","horror","tycoon","adventure"];
-  const results = await Promise.allSettled(feeds.map(q => searchGames(q,18)));
-  const unique = new Map();
-  for (const result of results) if (result.status==="fulfilled") for (const game of result.value) if (game.id && !unique.has(game.id)) unique.set(game.id,game);
-  const games = [...unique.values()];
-  games.sort((a,b)=>b.playing-a.playing);
-  if (!games.length) throw new Error("Roblox discovery returned no experiences. Check your connection and try again.");
-  return games.slice(0,60);
+  const sessionId = "RClient-" + app.getVersion();
+  let games = [];
+  try {
+    const params = new URLSearchParams({ sessionId, device: "computer", country: "all" });
+    const sortsData = await robloxGet("https://apis.roblox.com/explore-api/v1/get-sorts?" + params);
+    const sorts = Array.isArray(sortsData.sorts) ? sortsData.sorts : [];
+    const preferred = sorts.filter(sort => /top playing|trending|popular|up.and.coming/i.test(
+      [sort.sortDisplayName, sort.name, sort.sortId].filter(Boolean).join(" ")
+    ));
+    const selected = (preferred.length ? preferred : sorts).slice(0, 4);
+    const results = await Promise.allSettled(selected.map(async sort => {
+      const sortId = sort.sortId || sort.token;
+      if (!sortId) return [];
+      const query = new URLSearchParams({ sessionId, sortId, device: "computer", country: "all", maxRows: "50" });
+      const data = await robloxGet("https://apis.roblox.com/explore-api/v1/get-sort-content?" + query);
+      return extractGameRecords(data);
+    }));
+    const merged = new Map();
+    for (const result of results) if (result.status === "fulfilled") {
+      for (const item of result.value) merged.set(Number(item.universeId), item);
+    }
+    games = await hydrateGameRecords([...merged.values()]);
+  } catch {}
+  if (!games.length) {
+    const feeds = ["anime", "obby", "roleplay", "horror", "simulator", "tycoon"];
+    const results = await Promise.allSettled(feeds.map(q => searchGames(q, 20)));
+    const unique = new Map();
+    for (const result of results) if (result.status === "fulfilled") {
+      for (const game of result.value) if (!unique.has(game.id)) unique.set(game.id, game);
+    }
+    games = [...unique.values()];
+  }
+  games.sort((a, b) => b.playing - a.playing);
+  if (!games.length) throw new Error("Roblox discovery could not load any experiences. Try again in a moment.");
+  return games.slice(0, 60);
 });
 ipcMain.handle("roblox:game-thumbnails", async (_e, ids) => getGameImages(safeIds(ids)));
 ipcMain.handle("roblox:search-catalog", async (_e, options) => searchCatalog(typeof options==="string" ? {keyword:options} : options));
@@ -214,13 +268,34 @@ ipcMain.handle("roblox:account-avatar", async (_e, userId) => {
   return data.data?.[0]?.imageUrl||null;
 });
 ipcMain.handle("roblox:open-game", async (_e, placeId) => {
-  const id=Number(placeId); if(!Number.isSafeInteger(id)||id<=0) throw new Error("Invalid place ID");
-  try { await shell.openExternal("roblox://placeId="+id); }
-  catch { await shell.openExternal("https://www.roblox.com/games/start?placeId="+id); }
-  const cfg=readConfig();
-  const recentGames=[{id,playedAt:Date.now()},...cfg.recentGames.filter(x=>x.id!==id)].slice(0,12);
-  writeConfig({recentGames});
-  return true;
+  const id = Number(placeId);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid Roblox place ID.");
+  const protocolUrl = "roblox://placeId=" + id;
+  const webUrl = "https://www.roblox.com/games/" + id;
+  const cfg = readConfig();
+  let method = "browser";
+  if (process.platform === "win32" && cfg.robloxInstallPath && path.basename(cfg.robloxInstallPath) === "RobloxPlayerBeta.exe") {
+    const launcher = path.join(path.dirname(cfg.robloxInstallPath), "RobloxPlayerLauncher.exe");
+    if (fs.existsSync(launcher)) {
+      try {
+        const child = require("node:child_process").spawn(launcher, [protocolUrl], { detached: true, stdio: "ignore", windowsHide: true });
+        child.unref();
+        method = "app";
+      } catch {}
+    }
+  }
+  if (method !== "app") {
+    try {
+      await shell.openExternal(protocolUrl);
+      method = "app";
+    } catch {
+      await shell.openExternal(webUrl);
+      method = "browser";
+    }
+  }
+  const recentGames = [{ id, playedAt: Date.now() }, ...(cfg.recentGames || []).filter(x => Number(x.id) !== id)].slice(0, 12);
+  writeConfig({ recentGames });
+  return { method, url: method === "browser" ? webUrl : protocolUrl };
 });
 ipcMain.handle("roblox:open-catalog-item", async (_e,id) => {
   const n=Number(id); if(!Number.isSafeInteger(n)||n<=0) throw new Error("Invalid catalog item ID");
