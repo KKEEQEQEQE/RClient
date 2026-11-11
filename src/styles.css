@@ -79,3 +79,12 @@ body[data-theme="light"] .avatar-stage{background:radial-gradient(ellipse at 50%
 @media(max-width:1200px){.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.avatar-shop-layout{grid-template-columns:230px minmax(0,1fr)}}
 @media(max-width:900px){.avatar-shop-layout{grid-template-columns:1fr}.avatar-preview-panel{position:static}.avatar-stage{height:250px}.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.account-connect-row{flex-direction:column}.shop-filter-row{flex-wrap:wrap}}
+
+/* Installation picker and accessibility customization */
+:root{--ui-font:"Inter"}
+body,button,input,select,textarea{font-family:var(--ui-font),system-ui,sans-serif}
+.install-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.customization-controls{display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin:18px 0}
+.customization-controls label{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px}
+.customization-controls input[type=color]{width:42px;height:32px;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--panel);cursor:pointer}
+.customization-controls select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 12px}
