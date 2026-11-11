@@ -1,7 +1,7 @@
 {
   "name": "rclient",
-  "version": "0.1.1",
-  "description": "A modern desktop companion for discovering and launching Roblox experiences.",
+  "version": "0.2.0",
+  "description": "A feature-rich desktop companion for Roblox discovery and avatar shopping.",
   "main": "src/main.js",
   "author": "RClient",
   "license": "MIT",
@@ -32,7 +32,8 @@
       {
         "provider": "github",
         "owner": "KKEEQEQEQE",
-        "repo": "RClient"
+        "repo": "RClient",
+        "releaseType": "release"
       }
     ],
     "win": {
@@ -53,8 +54,20 @@
     },
     "mac": {
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     }
   }
