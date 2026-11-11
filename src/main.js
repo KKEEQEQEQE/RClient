@@ -152,7 +152,8 @@ ipcMain.handle("roblox:account-avatar", async (_e, userId) => {
 });
 ipcMain.handle("roblox:open-game", async (_e, placeId) => {
   const id=Number(placeId); if(!Number.isSafeInteger(id)||id<=0) throw new Error("Invalid place ID");
-  await shell.openExternal("roblox://placeId="+id);
+  try { await shell.openExternal("roblox://placeId="+id); }
+  catch { await shell.openExternal("https://www.roblox.com/games/start?placeId="+id); }
   const cfg=readConfig();
   const recentGames=[{id,playedAt:Date.now()},...cfg.recentGames.filter(x=>x.id!==id)].slice(0,12);
   writeConfig({recentGames});
