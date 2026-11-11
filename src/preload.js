@@ -16,5 +16,11 @@ contextBridge.exposeInMainWorld("rclient", {
   openExternal: url => ipcRenderer.invoke("system:open-external", url),
   detectRoblox: () => ipcRenderer.invoke("system:detect-roblox"),
   checkUpdates: () => ipcRenderer.invoke("updates:check"),
-  onUpdateDownloaded: callback => ipcRenderer.on("updates:downloaded", callback)
+  downloadUpdate: () => ipcRenderer.invoke("updates:download"),
+  installUpdate: () => ipcRenderer.invoke("updates:install"),
+  onUpdateAvailable: callback => ipcRenderer.on("updates:available", (_event, info) => callback(info)),
+  onUpdateDownloaded: callback => ipcRenderer.on("updates:downloaded", (_event, info) => callback(info)),
+  onUpdateProgress: callback => ipcRenderer.on("updates:progress", (_event, progress) => callback(progress)),
+  onUpdateNotAvailable: callback => ipcRenderer.on("updates:not-available", callback),
+  onUpdateError: callback => ipcRenderer.on("updates:error", (_event, error) => callback(error))
 });
