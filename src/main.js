@@ -2,293 +2,230 @@ const { app, BrowserWindow, ipcMain, shell, nativeTheme } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 const { autoUpdater } = require("electron-updater");
+const execFileAsync = promisify(execFile);
 
-const APP_ID = "com.rclient.desktop";
 const DEFAULTS = {
-  theme: "dark",
-  accent: "#8b7cff",
-  favorites: [],
-  recentGames: [],
-  fpsTarget: 240,
-  showPresence: true,
-  compactMode: false
+  theme: "dark", accent: "#8b7cff", favorites: [], recentGames: [],
+  fpsTarget: 240, showPresence: true, compactMode: false,
+  linkedAccount: null, catalogCategory: "all", catalogSort: "relevance"
 };
-
 let mainWindow;
 let configPath;
 
 function readConfig() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    return { ...DEFAULTS, ...parsed };
-  } catch {
-    return { ...DEFAULTS };
-  }
+  try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(configPath, "utf8")) }; }
+  catch { return { ...DEFAULTS }; }
 }
-
-function writeConfig(next) {
-  const current = readConfig();
-  const merged = { ...current, ...next };
+function writeConfig(patch) {
+  const merged = { ...readConfig(), ...patch };
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, JSON.stringify(merged, null, 2), "utf8");
   return merged;
 }
-
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1420,
-    height: 900,
-    minWidth: 1080,
-    minHeight: 680,
-    backgroundColor: "#0c0d12",
-    title: "RClient",
-    autoHideMenuBar: true,
+    width: 1460, height: 940, minWidth: 1060, minHeight: 700,
+    backgroundColor: "#0c0d12", title: "RClient", autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
+      contextIsolation: true, nodeIntegration: false, sandbox: true
     }
   });
-
   mainWindow.loadFile(path.join(__dirname, "index.html"));
   mainWindow.on("closed", () => { mainWindow = null; });
 }
-
 async function robloxGet(url) {
   const response = await fetch(url, {
-    headers: {
-      "Accept": "application/json",
-      "User-Agent": "RClient/0.1.0"
-    },
-    signal: AbortSignal.timeout(12000)
+    headers: { Accept: "application/json", "User-Agent": "RClient/0.2.0" },
+    signal: AbortSignal.timeout(16000)
   });
-
+  const body = await response.text();
   if (!response.ok) {
-    const error = new Error("Roblox returned HTTP " + response.status);
+    let detail = body.slice(0, 240);
+    try { detail = JSON.parse(body).errors?.[0]?.message || detail; } catch {}
+    const error = new Error("Roblox API " + response.status + ": " + detail);
     error.status = response.status;
     throw error;
   }
-
-  return response.json();
+  try { return JSON.parse(body); }
+  catch { throw new Error("Roblox returned an unreadable response."); }
 }
-
 function normalizeGame(game) {
   return {
-    id: game.id,
-    rootPlaceId: game.rootPlaceId || game.id,
-    name: game.name || "Untitled experience",
-    description: game.description || "",
-    creatorName: game.creatorName || game.creator?.name || "Unknown creator",
-    playing: game.playerCount ?? game.playing ?? 0,
-    visits: game.totalUpVotes ?? game.visits ?? 0,
-    maxPlayers: game.maxPlayers ?? 0,
-    price: game.price ?? 0,
-    source: "Roblox"
+    id: Number(game.id || game.universeId), rootPlaceId: Number(game.rootPlaceId || game.placeId || game.id),
+    name: game.name || "Untitled experience", description: game.description || "",
+    creatorName: game.creatorName || game.creator?.name || "Roblox creator",
+    playing: Number(game.playerCount ?? game.playing ?? 0),
+    visits: Number(game.visits ?? game.placeVisits ?? 0),
+    maxPlayers: Number(game.maxPlayers ?? 0), source: "Roblox"
   };
 }
-
+function safeIds(ids, max=50) {
+  return Array.isArray(ids) ? ids.map(Number).filter(id => Number.isSafeInteger(id) && id > 0).slice(0,max) : [];
+}
+async function searchGames(keyword, limit=30) {
+  const q = String(keyword || "").trim().slice(0,80);
+  if (!q) return [];
+  const params = new URLSearchParams({ keyword:q, limit:String(limit), sortOrder:"2", sortType:"1" });
+  const data = await robloxGet("https://games.roblox.com/v1/games/search?" + params);
+  return (data.games || data.data || []).map(normalizeGame).filter(g => g.id);
+}
+async function getGameImages(ids) {
+  if (!ids.length) return {};
+  const data = await robloxGet("https://thumbnails.roblox.com/v1/games/icons?universeIds=" + ids.join(",") + "&size=512x512&format=Png&isCircular=false");
+  return Object.fromEntries((data.data || []).map(x => [x.targetId,x.imageUrl]));
+}
+async function searchCatalog({keyword="",category="all",sort="relevance",limit=30}={}) {
+  const params = new URLSearchParams({ Category:"1", Limit:String(limit), SortType: sort === "recent" ? "2" : sort === "price-low" ? "5" : "3" });
+  if (keyword) params.set("Keyword", String(keyword).slice(0,80));
+  const categoryTypes = {
+    clothing: "Shirt, Pants, TShirt",
+    accessories: "Hat, HairAccessory, FaceAccessory, NeckAccessory, ShoulderAccessory, FrontAccessory, BackAccessory, WaistAccessory",
+    heads: "Head, DynamicHead",
+    faces: "Face",
+    bundles: "Bundle",
+    animations: "EmoteAnimation, RunAnimation, WalkAnimation, IdleAnimation, JumpAnimation, FallAnimation, SwimAnimation, ClimbAnimation"
+  };
+  if (categoryTypes[category]) params.set("AssetTypes", categoryTypes[category]);
+  const data = await robloxGet("https://catalog.roblox.com/v1/search/items/details?" + params);
+  return (data.data || []).map(item => ({
+    id:Number(item.id), name:item.name || "Catalog item",
+    creatorName:item.creatorName || item.creator?.name || "Creator",
+    price:item.price ?? null, itemType:item.itemType || "Asset",
+    productId:item.productId || null, favoriteCount:item.favoriteCount || 0
+  })).filter(x=>x.id);
+}
 ipcMain.handle("app:get-version", () => app.getVersion());
 ipcMain.handle("app:get-platform", () => process.platform);
 ipcMain.handle("app:get-config", () => readConfig());
-ipcMain.handle("app:set-config", (_event, patch) => {
-  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
-    throw new Error("Invalid settings payload");
-  }
+ipcMain.handle("app:set-config", (_e, patch) => {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) throw new Error("Invalid settings payload");
   const allowed = {};
-  for (const key of ["theme", "accent", "favorites", "recentGames", "fpsTarget", "showPresence", "compactMode"]) {
-    if (Object.hasOwn(patch, key)) allowed[key] = patch[key];
+  for (const key of ["theme","accent","favorites","recentGames","fpsTarget","showPresence","compactMode","linkedAccount","catalogCategory","catalogSort"]) {
+    if (Object.hasOwn(patch,key)) allowed[key]=patch[key];
   }
-  if (allowed.theme && !["dark", "light", "midnight"].includes(allowed.theme)) {
-    throw new Error("Unsupported theme");
-  }
-  if (allowed.fpsTarget && ![60, 120, 144, 165, 240].includes(allowed.fpsTarget)) {
-    throw new Error("Unsupported frame-rate target");
-  }
+  if (allowed.theme && !["dark","light","midnight"].includes(allowed.theme)) throw new Error("Unsupported theme");
+  if (allowed.fpsTarget && ![60,120,144,165,240].includes(allowed.fpsTarget)) throw new Error("Unsupported frame-rate target");
+  if (allowed.linkedAccount && (!Number.isSafeInteger(Number(allowed.linkedAccount.id)) || !String(allowed.linkedAccount.name || "").trim())) throw new Error("Invalid linked account");
   return writeConfig(allowed);
 });
 
-ipcMain.handle("roblox:search-games", async (_event, keyword) => {
-  const query = String(keyword || "").trim().slice(0, 80);
-  if (!query) return [];
-  const url = "https://games.roblox.com/v1/games/search?keyword=" +
-    encodeURIComponent(query) + "&limit=24&sortOrder=2";
-  const data = await robloxGet(url);
-  return (data.data || []).map(normalizeGame);
-});
-
+ipcMain.handle("roblox:search-games", async (_e, keyword) => searchGames(keyword));
 ipcMain.handle("roblox:popular-games", async () => {
-  const searches = ["popular", "obby", "roleplay"];
-  const results = await Promise.allSettled(searches.map(async keyword => {
-    const url = "https://games.roblox.com/v1/games/search?keyword=" +
-      encodeURIComponent(keyword) + "&limit=12&sortOrder=2";
-    const data = await robloxGet(url);
-    return (data.data || []).map(normalizeGame);
-  }));
-
+  const feeds = ["popular","anime","obby","roleplay","simulator","horror","tycoon","adventure"];
+  const results = await Promise.allSettled(feeds.map(q => searchGames(q,18)));
   const unique = new Map();
-  for (const result of results) {
-    if (result.status !== "fulfilled") continue;
-    for (const game of result.value) {
-      if (game.id && !unique.has(game.id)) unique.set(game.id, game);
-    }
-  }
-  return [...unique.values()].slice(0, 30);
+  for (const result of results) if (result.status==="fulfilled") for (const game of result.value) if (game.id && !unique.has(game.id)) unique.set(game.id,game);
+  const games = [...unique.values()];
+  games.sort((a,b)=>b.playing-a.playing);
+  if (!games.length) throw new Error("Roblox discovery returned no experiences. Check your connection and try again.");
+  return games.slice(0,60);
 });
-
-ipcMain.handle("roblox:game-thumbnails", async (_event, ids) => {
-  const safeIds = Array.isArray(ids)
-    ? ids.map(Number).filter(id => Number.isSafeInteger(id) && id > 0).slice(0, 50)
-    : [];
-  if (!safeIds.length) return {};
-  const url = "https://thumbnails.roblox.com/v1/games/icons?universeIds=" +
-    safeIds.join(",") + "&size=512x512&format=Png&isCircular=false";
-  const data = await robloxGet(url);
-  return Object.fromEntries((data.data || []).map(item => [item.targetId, item.imageUrl]));
+ipcMain.handle("roblox:game-thumbnails", async (_e, ids) => getGameImages(safeIds(ids)));
+ipcMain.handle("roblox:search-catalog", async (_e, options) => searchCatalog(typeof options==="string" ? {keyword:options} : options));
+ipcMain.handle("roblox:catalog-thumbnails", async (_e, ids) => {
+  const safe = safeIds(ids);
+  if (!safe.length) return {};
+  const data = await robloxGet("https://thumbnails.roblox.com/v1/assets?assetIds="+safe.join(",")+"&returnPolicy=PlaceHolder&size=420x420&format=Png");
+  return Object.fromEntries((data.data||[]).map(x=>[x.targetId,x.imageUrl]));
 });
-
-ipcMain.handle("roblox:search-catalog", async (_event, keyword) => {
-  const query = String(keyword || "").trim().slice(0, 80);
-  if (!query) return [];
-  const url = "https://catalog.roblox.com/v1/search/items/details?Category=1&Keyword=" +
-    encodeURIComponent(query) + "&Limit=30&SortType=3";
-  const data = await robloxGet(url);
-  return (data.data || []).map(item => ({
-    id: item.id,
-    name: item.name || "Catalog item",
-    creatorName: item.creatorName || item.creatorTargetId || "Creator",
-    price: item.price ?? null,
-    itemType: item.itemType || "Asset",
-    productId: item.productId || null
-  }));
-});
-
-ipcMain.handle("roblox:open-game", async (_event, placeId) => {
-  const id = Number(placeId);
-  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid place ID");
-  const directUrl = "roblox://placeId=" + id;
-  const fallbackUrl = "https://www.roblox.com/games/start?placeId=" + id;
-  try {
-    await shell.openExternal(directUrl);
-  } catch {
-    await shell.openExternal(fallbackUrl);
-  }
-  const config = readConfig();
-  const recentGames = [{ id, playedAt: Date.now() }, ...config.recentGames.filter(item => item.id !== id)].slice(0, 12);
-  writeConfig({ recentGames });
-  return true;
-});
-
-ipcMain.handle("roblox:open-catalog-item", async (_event, itemId) => {
-  const id = Number(itemId);
-  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid catalog item ID");
-  await shell.openExternal("https://www.roblox.com/catalog/" + id);
-  return true;
-});
-
-ipcMain.handle("roblox:open-profile", async () => {
-  await shell.openExternal("https://www.roblox.com/users/profile");
-});
-
-ipcMain.handle("roblox:open-settings", async () => {
-  await shell.openExternal("https://www.roblox.com/my/account#!/info");
-});
-
-ipcMain.handle("system:open-external", async (_event, rawUrl) => {
-  const url = new URL(String(rawUrl));
-  if (!["https:", "http:"].includes(url.protocol)) throw new Error("Only web links are allowed");
-  await shell.openExternal(url.toString());
-  return true;
-});
-
-ipcMain.handle("system:detect-roblox", () => {
-  const candidates = [];
-  if (process.platform === "win32") {
-    const local = process.env.LOCALAPPDATA || "";
-    const roaming = process.env.APPDATA || "";
-    candidates.push(
-      path.join(local, "Roblox", "Versions"),
-      path.join(roaming, "Microsoft", "Windows", "Start Menu", "Programs", "Roblox")
-    );
-    const versions = path.join(local, "Roblox", "Versions");
-    let foundVersion = null;
-    try {
-      foundVersion = fs.readdirSync(versions, { withFileTypes: true })
-        .filter(entry => entry.isDirectory())
-        .map(entry => path.join(versions, entry.name, "RobloxPlayerBeta.exe"))
-        .find(file => fs.existsSync(file)) || null;
-    } catch {}
-    return { installed: Boolean(foundVersion), executable: foundVersion, checked: candidates };
-  }
-  if (process.platform === "darwin") {
-    const appPath = "/Applications/Roblox.app";
-    return { installed: fs.existsSync(appPath), executable: appPath, checked: [appPath] };
-  }
-  return { installed: false, executable: null, checked: [] };
-});
-
-ipcMain.handle("updates:check", async () => {
-  if (!app.isPackaged) return { available: false, message: "Updates are available in installed builds." };
-  try {
-    const result = await autoUpdater.checkForUpdates();
-    return { available: Boolean(result?.updateInfo), version: result?.updateInfo?.version || null };
-  } catch (error) {
-    return { available: false, message: error.message };
-  }
-});
-
-ipcMain.handle("updates:download", async () => {
-  if (!app.isPackaged) throw new Error("Updates are available in installed builds.");
-  return autoUpdater.downloadUpdate();
-});
-
-ipcMain.handle("updates:install", () => {
-  if (!app.isPackaged) return false;
-  autoUpdater.quitAndInstall();
-  return true;
-});
-
-app.whenReady().then(() => {
-  configPath = path.join(app.getPath("userData"), "settings.json");
-  nativeTheme.themeSource = readConfig().theme === "light" ? "light" : "dark";
-  createWindow();
-
-  if (app.isPackaged) {
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.on("checking-for-update", () => {
-      if (mainWindow) mainWindow.webContents.send("updates:checking");
-    });
-    autoUpdater.on("update-available", info => {
-      if (mainWindow) mainWindow.webContents.send("updates:available", { version: info.version });
-    });
-    autoUpdater.on("update-not-available", () => {
-      if (mainWindow) mainWindow.webContents.send("updates:not-available");
-    });
-    autoUpdater.on("download-progress", progress => {
-      if (mainWindow) mainWindow.webContents.send("updates:progress", {
-        percent: Math.round(progress.percent || 0)
-      });
-    });
-    autoUpdater.on("update-downloaded", info => {
-      if (mainWindow) mainWindow.webContents.send("updates:downloaded", { version: info.version });
-    });
-    autoUpdater.on("error", error => {
-      if (mainWindow) mainWindow.webContents.send("updates:error", { message: error.message });
-    });
-    mainWindow.webContents.once("did-finish-load", () => {
-      autoUpdater.checkForUpdates().catch(error => {
-        if (mainWindow) mainWindow.webContents.send("updates:error", { message: error.message });
-      });
-    });
-  }
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+ipcMain.handle("roblox:lookup-account", async (_e, username) => {
+  const name = String(username||"").trim().replace(/^@/,"").slice(0,20);
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw new Error("Enter a valid Roblox username.");
+  const data = await robloxGet("https://users.roblox.com/v1/usernames/users");
+  const response = await fetch("https://users.roblox.com/v1/usernames/users",{
+    method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},
+    body:JSON.stringify({usernames:[name],excludeBannedUsers:true}),signal:AbortSignal.timeout(12000)
   });
+  if (!response.ok) throw new Error("Roblox account lookup failed ("+response.status+").");
+  const found = (await response.json()).data?.[0];
+  if (!found) throw new Error("No Roblox account found for @"+name+".");
+  const thumbs = await robloxGet("https://thumbnails.roblox.com/v1/users/avatar?userIds="+found.id+"&size=420x420&format=Png&isCircular=false");
+  return {id:found.id,name:found.name,displayName:found.displayName||found.name,avatar:thumbs.data?.[0]?.imageUrl||null};
+});
+ipcMain.handle("roblox:account-avatar", async (_e, userId) => {
+  const id=Number(userId); if(!Number.isSafeInteger(id)||id<=0) throw new Error("Invalid Roblox user ID.");
+  const data=await robloxGet("https://thumbnails.roblox.com/v1/users/avatar?userIds="+id+"&size=420x420&format=Png&isCircular=false");
+  return data.data?.[0]?.imageUrl||null;
+});
+ipcMain.handle("roblox:open-game", async (_e, placeId) => {
+  const id=Number(placeId); if(!Number.isSafeInteger(id)||id<=0) throw new Error("Invalid place ID");
+  await shell.openExternal("roblox://placeId="+id);
+  const cfg=readConfig();
+  const recentGames=[{id,playedAt:Date.now()},...cfg.recentGames.filter(x=>x.id!==id)].slice(0,12);
+  writeConfig({recentGames});
+  return true;
+});
+ipcMain.handle("roblox:open-catalog-item", async (_e,id) => {
+  const n=Number(id); if(!Number.isSafeInteger(n)||n<=0) throw new Error("Invalid catalog item ID");
+  await shell.openExternal("https://www.roblox.com/catalog/"+n); return true;
+});
+ipcMain.handle("roblox:open-profile", async (_e,id) => {
+  const n=Number(id); await shell.openExternal(Number.isSafeInteger(n)&&n>0 ? "https://www.roblox.com/users/"+n+"/profile" : "https://www.roblox.com/users/profile");
+});
+ipcMain.handle("roblox:open-settings", async () => shell.openExternal("https://www.roblox.com/my/account#!/info"));
+ipcMain.handle("system:open-external", async (_e,raw) => {
+  const url=new URL(String(raw)); if(!["https:","http:"].includes(url.protocol)) throw new Error("Only web links are allowed");
+  await shell.openExternal(url.toString()); return true;
 });
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+async function detectWindowsRoblox() {
+  const local=process.env.LOCALAPPDATA||"";
+  const roaming=process.env.APPDATA||"";
+  const candidates=[
+    path.join(local,"Roblox","Versions"),
+    path.join(local,"Packages","ROBLOXCORPORATION.ROBLOX_55nm5eh3cm0pr","LocalCache","Local","Roblox"),
+    path.join(roaming,"Microsoft","Windows","Start Menu","Programs","Roblox")
+  ];
+  let executable=null;
+  try {
+    const versions=fs.readdirSync(path.join(local,"Roblox","Versions"),{withFileTypes:true}).filter(x=>x.isDirectory());
+    for(const entry of versions){const p=path.join(local,"Roblox","Versions",entry.name,"RobloxPlayerBeta.exe");if(fs.existsSync(p)){executable=p;break;}}
+  } catch {}
+  let storePackage=null;
+  try {
+    const {stdout}=await execFileAsync("powershell.exe",["-NoProfile","-NonInteractive","-Command","Get-AppxPackage -Name '*ROBLOX*' | Select-Object -First 1 -ExpandProperty InstallLocation"],{timeout:5000,windowsHide:true});
+    storePackage=stdout.trim()||null;
+  } catch {}
+  if(!executable && storePackage){
+    for(const name of ["Windows10Universal.exe","RobloxPlayerBeta.exe"]){const p=path.join(storePackage,name);if(fs.existsSync(p)){executable=p;break;}}
+  }
+  return {installed:Boolean(executable||storePackage),type:executable?"Desktop Player":storePackage?"Microsoft Store":"Not found",executable:executable||storePackage,checked:candidates};
+}
+ipcMain.handle("system:detect-roblox", async () => {
+  if(process.platform==="win32") return detectWindowsRoblox();
+  if(process.platform==="darwin"){
+    const homes=[path.join(os.homedir(),"Applications","Roblox.app"),"/Applications/Roblox.app"];
+    const found=homes.find(p=>fs.existsSync(p))||null;
+    return {installed:Boolean(found),type:"macOS Player",executable:found,checked:homes};
+  }
+  return {installed:false,type:"Unsupported platform",executable:null,checked:[]};
 });
+ipcMain.handle("updates:check", async () => {
+  if(!app.isPackaged) return {available:false,message:"Updates are available in installed builds."};
+  try{const result=await autoUpdater.checkForUpdates();return {available:Boolean(result?.updateInfo),version:result?.updateInfo?.version||null};}
+  catch(error){return {available:false,message:error.message};}
+});
+ipcMain.handle("updates:download", async () => {if(!app.isPackaged)throw new Error("Updates are available in installed builds.");return autoUpdater.downloadUpdate();});
+ipcMain.handle("updates:install", () => {if(!app.isPackaged)return false;autoUpdater.quitAndInstall();return true;});
+
+app.whenReady().then(()=>{
+  configPath=path.join(app.getPath("userData"),"settings.json");
+  nativeTheme.themeSource=readConfig().theme==="light"?"light":"dark";
+  createWindow();
+  if(app.isPackaged){
+    autoUpdater.autoDownload=false;autoUpdater.autoInstallOnAppQuit=true;
+    autoUpdater.on("checking-for-update",()=>mainWindow?.webContents.send("updates:checking"));
+    autoUpdater.on("update-available",info=>mainWindow?.webContents.send("updates:available",{version:info.version}));
+    autoUpdater.on("update-not-available",()=>mainWindow?.webContents.send("updates:not-available"));
+    autoUpdater.on("download-progress",p=>mainWindow?.webContents.send("updates:progress",{percent:Math.round(p.percent||0)}));
+    autoUpdater.on("update-downloaded",info=>mainWindow?.webContents.send("updates:downloaded",{version:info.version}));
+    autoUpdater.on("error",error=>mainWindow?.webContents.send("updates:error",{message:error.message}));
+    mainWindow.webContents.once("did-finish-load",()=>autoUpdater.checkForUpdates().catch(error=>mainWindow?.webContents.send("updates:error",{message:error.message})));
+  }
+  app.on("activate",()=>{if(BrowserWindow.getAllWindows().length===0)createWindow();});
+});
+app.on("window-all-closed",()=>{if(process.platform!=="darwin")app.quit();});
