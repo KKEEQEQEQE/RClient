@@ -9,7 +9,10 @@ RClient is not affiliated with or endorsed by Roblox Corporation.
 - Roblox experience discovery and keyword search using public Roblox web APIs.
 - Experience thumbnails and player counts where Roblox provides them.
 - One-click handoff to the official Roblox experience page and installed player.
-- Catalog keyword search with official Roblox item pages for viewing and purchasing.
+- Populated avatar shop with Roblox catalog thumbnails, category filters, sorting, free-item filtering, and official item pages.
+- Public Roblox profile linking by username with avatar display; this is a profile lookup, not authenticated account ownership.
+- Shop and Customize views, with avatar editing handed off to Roblox's official editor.
+- Windows desktop and Microsoft Store Roblox installation detection, plus macOS app detection.
 - Local favorites and recently opened experiences.
 - Dark, Midnight, and Light themes.
 - Performance preference panel with common frame-rate targets.
@@ -54,13 +57,16 @@ The packaged app checks GitHub Releases using electron-updater. Publish versione
 
 RClient currently uses public Roblox web endpoints for experience search, game thumbnails, and catalog search. Launching hands off to the official Roblox website, which can open the Roblox Player when installed. Account actions and purchases stay on Roblox's official website; RClient does not collect Roblox passwords or session cookies.
 
+The account profile connection uses Roblox's public username lookup and avatar thumbnail endpoints; it does not authenticate the user or establish account ownership. Authenticated linking requires a registered Roblox OAuth application. The catalog displays Roblox-rendered item thumbnails; equipping and editing outfits are handled by Roblox's official avatar editor.
+
 The Performance page stores a preferred frame-rate target as a reminder. Users configure the actual Maximum Frame Rate in Roblox's own settings. RClient does not claim to force an unsupported frame-rate cap.
 
 ## Roadmap
 
 - [ ] More robust ranked/trending discovery feeds and genre filters.
 - [ ] Experience detail pages, server lists, and friend presence where supported by public APIs.
-- [ ] Catalog thumbnails, category filters, and avatar preview.
+- [x] Catalog thumbnails, category filters, and linked public-profile avatar preview.
+- [ ] Authenticated Roblox account linking through Roblox OAuth (requires a registered OAuth application).
 - [ ] Per-experience launch profiles and settings backup.
 - [ ] Multi-instance management with isolated app data where supported.
 - [ ] Optional second-screen status panel.
