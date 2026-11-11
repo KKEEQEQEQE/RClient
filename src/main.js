@@ -82,14 +82,25 @@ async function searchCatalog({keyword="",category="all",sort="relevance",limit=3
   const categoryMap = {
     all: {category:1},
     clothing: {category:3},
+    shirts: {category:3,subcategory:12},
+    tshirts: {category:3,subcategory:13},
+    pants: {category:3,subcategory:14},
     accessories: {category:11},
+    hats: {category:11,subcategory:9},
+    hair: {category:11,subcategory:20},
+    "face-accessories": {category:11,subcategory:21},
+    neck: {category:11,subcategory:22},
+    shoulder: {category:11,subcategory:23},
+    front: {category:11,subcategory:24},
+    back: {category:11,subcategory:25},
+    waist: {category:11,subcategory:26},
     heads: {category:4,subcategory:15},
     faces: {category:4,subcategory:10},
     bundles: {category:1,subcategory:37},
-    animations: {category:12,subcategory:27}
+    animations: {category:12,subcategory:27},
+    emotes: {category:12,subcategory:39},
+    gear: {category:5}
   };
-  const selected = categoryMap[category] || categoryMap.all;
-  const sortTypes = {relevance:0,recent:3,"price-low":4};
   const params = new URLSearchParams({
     Category:String(selected.category),
     Limit:String([10,28,30].includes(Number(limit))?Number(limit):30),
